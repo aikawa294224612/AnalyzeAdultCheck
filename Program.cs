@@ -1,50 +1,72 @@
 ﻿using Hl7.Fhir.Model;
 using Hl7.Fhir.Rest;
 using OfficeOpenXml;
-using System;
 using System.Net.Http.Headers;
-using System.Xml.Linq;
 
 namespace TestAdultCheck
 {
     class Program
     {
         static DataService secret = new DataService(); 
+        static LogicModels logic = new LogicModels();
         static string root = secret.root;
 
         static async System.Threading.Tasks.Task Main(string[] args)
         {
             string token = secret.token;
-            string org_id = secret.org_id;
+            string[] orgIds = {"1539335"};  //海端1539335  //延平3983763
             string fhirserver = secret.fhirserver;
-            string excelFilePath = root + "延平衛生所_50筆.xlsx";
+            string monthanddate = System.DateTime.Now.ToString("MMdd");
+            string excelFilePath = root + "衛生所成健_"+ monthanddate + ".xlsx";
             int index = 2;
+
+            var settings = new FhirClientSettings
+            {
+                Timeout = 200000
+            };
 
             var handler = new AuthorizationMessageHandler();
             handler.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            var client = new FhirClient(fhirserver, FhirClientSettings.CreateDefault(), handler);
-            
+
+            // var client = new FhirClient(fhirserver, FhirClientSettings.CreateDefault(), handler); 
+            var client = new FhirClient(fhirserver, settings, handler); 
+
             FileInfo excelFile = new FileInfo(excelFilePath);
             if (excelFile.Exists)
             {
                 excelFile.Delete();
                 excelFile = new FileInfo(excelFilePath);
             }
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+
+            ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
             ExcelPackage package = new ExcelPackage(excelFile);
-            ExcelWorksheet worksheet = package.Workbook.Worksheets.Add("Sheet1");
-            InitialExcel(worksheet);  //初始化: 產生表頭
 
-            Bundle results = client.Search<Composition>(new string[] { "author=Organization/" + org_id });
-            Console.WriteLine("總比數:"+ results.Entry.Count);
-
-            foreach (Bundle.EntryComponent entry in results.Entry)
+            foreach (string id in orgIds)
             {
-                Composition comp = (Composition)entry.Resource;
-                FillExcel(comp, worksheet, index);
-                index++; 
+                ExcelWorksheet worksheet = package.Workbook.Worksheets.Add(logic.GetOrgName(id));
+                InitialExcel(worksheet);  //初始化: 產生表頭
+
+                var searchParams = new SearchParams();
+                searchParams.Add("_total", "accurate"); 
+                searchParams.Add("author", "Organization/" + id); 
+
+                Bundle results = client.Search<Composition>(searchParams);
+
+                Console.WriteLine(logic.GetOrgName(id)+ "總比數: " + results.Total);
+
+                while (results != null)
+                {
+                    foreach (Bundle.EntryComponent entry in results.Entry)
+                    {
+                        Composition comp = (Composition)entry.Resource;
+                        FillExcel(comp, worksheet, index, client);
+                        index++;
+                    }
+                    results = await client.ContinueAsync(results);
+                }
             }
-            package.Save();
+                      
+            package.Save();  //儲存excel
         }
 
         public class AuthorizationMessageHandler : HttpClientHandler
@@ -60,246 +82,445 @@ namespace TestAdultCheck
 
         public static void InitialExcel(ExcelWorksheet worksheet)
         {
-            addExcel(worksheet, 1, "Composition.Id", "就醫序號", "Composition section數", "Patient", "Encounter", "衛生所", "檢驗單位",
-                 "高血壓", "糖尿病", "高血脂症", "心臟病", "腦中風", "腎臟病",
-                 "身高", "體重", "BMI", "血壓", "腰圍",
-                 "Protein 尿蛋白", "血糖", "膽固醇", "三酸甘油脂", "低密度脂蛋白膽固醇計算", "高密度膽固醇",
-                 "ＧＯＴ", "ＧＰＴ", "肌酸酐", "腎絲球過濾率計算", "Ｂ型肝炎表面抗原", "Ｃ型肝炎病毒抗體",
-                 "憂鬱檢測", "吸煙", "喝酒", "嚼檳榔", "運動",
-                 "健康諮詢：戒煙", "健康諮詢：節酒", "健康諮詢：戒檳榔", "健康諮詢：規律運動",
-                 "健康諮詢：維持正常體重", "健康諮詢：健康飲食", "健康諮詢：事故傷害預防",
-                 "健康諮詢：口腔保健", "檢查過B、C型肝炎", "血壓檢查結果與建議", "血糖檢查結果判讀",
-                 "血脂肪檢查結果判讀", "腎功能檢查結果判讀", "肝功能檢查結果判讀", "代謝症候群檢查結果與建議",
-                 "B型肝炎檢查結果與建議", "C型肝炎檢查結果與建議", "憂鬱檢測結果與建議");
+            addExcel(worksheet, 1, "姓名", "身分證號", "出生日期", "性別", "電話", "第一階段檢查日期",
+                "第二階段檢查日期", "檢查結果上傳日期", "檢查過B、C型肝炎", "疾病史：高血壓",
+                "疾病史：糖尿病", "疾病史：高血脂症", "心臟病", "腦中風", "腎臟病", "血壓 -- 收縮壓",
+                "血壓 -- 舒張壓", "高血壓", "三高", "腰圍", "BMI", "吸煙", "喝酒", "嚼檳榔", "運動",
+                "健康諮詢：戒煙", "健康諮詢：節酒", "健康諮詢：戒檳榔", "健康諮詢：規律運動", "健康諮詢：維持正常體",
+                "健康諮詢：健康飲食", "健康諮詢：事故傷害預", "健康諮詢：口腔保健", "B型肝炎表面抗原", "C型肝炎病毒抗體",
+                "感覺情緒低落沮喪", "做事情失去興趣", "尿液--酸鹼值", "Protein 尿蛋白", "尿糖", "尿沉渣鏡檢", "潛血",
+                "尿液紅血球", "尿液白血球", "尿液上皮細胞", "Cast", "Bacteria", "Appearance", "高血脂", "膽固醇",
+                "三酸甘油脂", "空腹血糖", "肌酸肝", "ＧＯＴ", "ＧＰＴ", "高密度膽固醇", "低密度脂蛋白膽固醇計",
+                "腎絲球過濾率計算", "肝功能檢查結果判讀", "血糖檢查結果判讀", "血脂肪檢查結果判讀", "腎功能檢查結果判讀",
+                "血壓檢查結果與建議", "代謝症候群檢查結果與", "憂鬱檢測結果與建議", "Composition Id");
+
         }
 
-        public static void FillExcel(Composition comp, ExcelWorksheet worksheet, int index)
+        public static void FillExcel(Composition comp, ExcelWorksheet worksheet, int index, FhirClient client)
         {
             string com_id = comp.Id;
             string num = comp.Section.Count.ToString();
 
-            string org2 = "";
-            string hypertension = "";
-            string diabetes = "";
-            string hyperlipidemia = "";
-            string heartDisease = "";
-            string stroke = "";
-            string kidneyDisease = "";
-            string height = "";
-            string weight = "";
-            string bmi = "";
-            string bloodPressure = "";
-            string waistCircumference = "";
-            string urineProtein = "";
-            string bloodSugar = "";
-            string cholesterol = "";
-            string triglycerides = "";
-            string ldlCholesterol = "";
-            string hdlCholesterol = "";
-            string got = "";
-            string gpt = "";
-            string creatinine = "";
-            string egfr = "";
-            string hepatitisB = "";
-            string hepatitisC = "";
-            string depressionScreening = "";
-            string smoking = "";
-            string alcoholConsumption = "";
-            string betelNutChewing = "";
-            string exercise = "";
-            string quitSmokingConsultation = "";
-            string reduceAlcoholConsultation = "";
-            string quitBetelNutConsultation = "";
-            string regularExerciseConsultation = "";
-            string maintainNormalWeightConsultation = "";
-            string healthyDietConsultation = "";
-            string accidentInjuryPreventionConsultation = "";
-            string oralCareConsultation = "";
-            string checkedHepatitisBC = "";
-            string bloodPressureCheckResult = "";
-            string bloodSugarCheckResult = "";
-            string lipidCheckResult = "";
-            string kidneyFunctionCheckResult = "";
-            string liverFunctionCheckResult = "";
-            string metabolicSyndromeCheckResult = "";
-            string hepatitisBCheckResult = "";
-            string hepatitisCCheckResult = "";
-            string depressionScreeningResult = "";
+            string name = string.Empty, id = string.Empty, birthDate = string.Empty, gender = string.Empty,
+                phone = string.Empty, firstCheckDate = string.Empty, secondCheckDate = string.Empty,
+                resultUploadDate = string.Empty, checkBCTypeHepatitis = string.Empty,
+                hypertensionHistory = "否", diabetesHistory = "否", hyperlipidemiaHistory = "否",
+                heartDisease = "否", stroke = "否", kidneyDisease = "否", systolicPressure = string.Empty,
+                diastolicPressure = string.Empty, highBloodPressure = string.Empty, threeHigh = string.Empty,
+                waistCircumference = string.Empty, BMI = string.Empty, smoking = string.Empty,
+                alcoholConsumption = string.Empty, betelNutChewing = string.Empty, exercise = string.Empty,
+                smokingCessationConsultation = string.Empty, alcoholReductionConsultation = string.Empty,
+                betelNutCessationConsultation = string.Empty, regularExerciseConsultation = string.Empty,
+                maintainNormalWeightConsultation = string.Empty, healthyDietConsultation = string.Empty,
+                accidentInjuryPreventionConsultation = string.Empty, oralHealthCareConsultation = string.Empty,
+                hepatitisBSurfaceAntigen = "未執行", hepatitisCAntibody = "未執行", lowMood = string.Empty,
+                lossOfInterest = string.Empty, urineAcidityValue = string.Empty, urineProtein = string.Empty,
+                urineSugar = string.Empty, urineSedimentMicroscopy = string.Empty, occultBlood = string.Empty,
+                urineRedBloodCells = string.Empty, urineWhiteBloodCells = string.Empty,
+                urineEpithelialCells = string.Empty, cast = string.Empty, bacteria = string.Empty,
+                appearance = string.Empty, hyperlipidemia = string.Empty, cholesterol = string.Empty,
+                triglycerides = string.Empty, fastingBloodSugar = string.Empty, creatinine = string.Empty,
+                GOT = string.Empty, GPT = string.Empty, highDensityLipoproteinCholesterol = string.Empty,
+                lowDensityLipoproteinCholesterol = string.Empty, glomerularFiltrationRate = string.Empty,
+                liverFunctionResultInterpretation = string.Empty, bloodSugarResultInterpretation = string.Empty,
+                lipidProfileResultInterpretation = string.Empty, kidneyFunctionResultInterpretation = string.Empty,
+                bloodPressureResultAndRecommendation = string.Empty, metabolicSyndromeResultAndRecommendation = string.Empty,
+                depressionDetectionResultAndRecommendation = string.Empty;
 
 
-            string patient = comp.Subject.Reference.ToString();
-            string enc = comp.Encounter.Reference.ToString();
-            string org1 = comp.Author[0].Reference.ToString();
-            string id = comp.Identifier.Value.ToString();
-            if (comp.Author.Count > 1)
+            string patientId = comp.Subject.Reference.ToString();
+            Patient pat = client.Read<Patient>(patientId);
+            if (pat != null)
             {
-                org2 = comp.Author[1].Reference.ToString();
+                name = pat.Name[0].Text;  //姓名
+                foreach (Identifier identifier in pat.Identifier)
+                {
+                    if (identifier.System == "http://www.moi.gov.tw/")
+                    {
+                        id = identifier.Value;  //身分證字號
+                    }
+                }
+                birthDate = pat.BirthDate;
+                gender = logic.ChangeGender(pat.Gender);
+                if (pat.Telecom != null && pat.Telecom.Count > 0)
+                {
+                    phone = pat.Telecom[0].Value;
+                }
+                
             }
+
+            string encId = comp.Encounter.Reference.ToString();
+            Encounter enc = client.Read<Encounter>(encId);
+            Encounter.StatusHistoryComponent first = enc.StatusHistory[0];  //第一階段檢查日期
+            if(enc.StatusHistory.Count > 1)
+            {
+                Encounter.StatusHistoryComponent second = enc.StatusHistory[1]; //第二階段檢查日期
+                secondCheckDate = logic.AdToRocEra(second.Period.Start);
+            } 
+            firstCheckDate = logic.AdToRocEra(first.Period.Start);                  
 
             foreach (var sec in comp.Section)
             {
                 switch (sec.Title)
                 {
                     case "疾病史-高血壓":
-                        hypertension = sec.Entry[0].Reference.ToString();
+                        hypertensionHistory = "是";
                         break;
                     case "疾病史-糖尿病":
-                        diabetes = sec.Entry[0].Reference.ToString();
+                        diabetesHistory = "是";
                         break;
                     case "疾病史-高血脂症":
-                        hyperlipidemia = sec.Entry[0].Reference.ToString();
+                        hyperlipidemiaHistory = "是";
                         break;
                     case "疾病史-心臟病":
-                        heartDisease = sec.Entry[0].Reference.ToString();
+                        heartDisease = "是";
                         break;
                     case "疾病史-腦中風":
-                        stroke = sec.Entry[0].Reference.ToString();
+                        stroke = "是";
                         break;
                     case "疾病史-腎臟病":
-                        kidneyDisease = sec.Entry[0].Reference.ToString();
+                        kidneyDisease = "是";
                         break;
-                    case "生理量測-身高":
-                        height = sec.Entry[0].Reference.ToString();
-                        break;
-                    case "生理量測-體重":
-                        weight = sec.Entry[0].Reference.ToString();
-                        break;
+                    //case "生理量測-身高":
+                    //    height = sec.Entry[0].Reference.ToString();
+                    //    break;
+                    //case "生理量測-體重":
+                    //    weight = sec.Entry[0].Reference.ToString();
+                    //    break;
                     case "生理量測-BMI":
-                        bmi = sec.Entry[0].Reference.ToString();
+                        string bmiId = sec.Entry[0].Reference.ToString();
+                        Observation bmi = client.Read<Observation>(bmiId);
+                        if (bmi.Value is Quantity bmiValue)
+                        {
+                            BMI = bmiValue.Value.ToString();
+                        }
                         break;
                     case "生理量測-血壓":
-                        bloodPressure = sec.Entry[0].Reference.ToString();
+                        string bloodPressureId = sec.Entry[0].Reference.ToString();
+                        Observation pb = client.Read<Observation>(bloodPressureId);
+
+                        foreach (var component in pb.Component)
+                        {
+                            if (component.Code.Coding[0].Code == "8480-6")
+                            {
+                                if (component.Value is Quantity systolicValue)
+                                {
+                                    systolicPressure = systolicValue.Value.ToString();
+                                }                               
+                            }
+                            if (component.Code.Coding[0].Code == "8462-4")
+                            {
+                                if (component.Value is Quantity diastolicValue)
+                                {
+                                    diastolicPressure = diastolicValue.Value.ToString();
+                                }
+                            }
+                        }
                         break;
                     case "生理量測-腰圍":
-                        waistCircumference = sec.Entry[0].Reference.ToString();
+                        string waistId = sec.Entry[0].Reference.ToString();
+                        Observation waist = client.Read<Observation>(waistId);
+
+                        if (waist.Value is Quantity waisyValue)
+                        {
+                            waistCircumference = waisyValue.Value.ToString();
+                        }
                         break;
                     case "檢驗檢查-Protein 尿蛋白":
-                        urineProtein = sec.Entry[0].Reference.ToString();
+                        string urineProteinId = sec.Entry[0].Reference.ToString();
+                        Observation urine = client.Read<Observation>(urineProteinId);
+
+                        if (urine.Value is Quantity upValue)
+                        {
+                            urineProtein = upValue.Value.ToString();
+                        }
                         break;
                     case "檢驗檢查-血糖":
-                        bloodSugar = sec.Entry[0].Reference.ToString();
+                        string bloodSugarId = sec.Entry[0].Reference.ToString();
+                        Observation sugar = client.Read<Observation>(bloodSugarId);
+                        resultUploadDate = logic.AdToRocEra(sugar.Issued.ToString());
+
+                        if (sugar.Value is Quantity sugarValue)
+                        {
+                            fastingBloodSugar = sugarValue.Value.ToString();
+                        }
                         break;
                     case "檢驗檢查-膽固醇":
-                        cholesterol = sec.Entry[0].Reference.ToString();
+                        string cholesterolId = sec.Entry[0].Reference.ToString();
+                        Observation chol = client.Read<Observation>(cholesterolId);
+                        resultUploadDate = logic.AdToRocEra(chol.Issued.ToString());
+
+                        if (chol.Value is Quantity cholValue)
+                        {
+                            cholesterol = cholValue.Value.ToString();
+                        }
                         break;
                     case "檢驗檢查-三酸甘油脂":
-                        triglycerides = sec.Entry[0].Reference.ToString();
+                        string triglyceridesId = sec.Entry[0].Reference.ToString();
+                        Observation tri = client.Read<Observation>(triglyceridesId);
+                        resultUploadDate = logic.AdToRocEra(tri.Issued.ToString());
+
+                        if (tri.Value is Quantity triValue)
+                        {
+                            triglycerides = triValue.Value.ToString();
+                        }
                         break;
                     case "檢驗檢查-低密度脂蛋白膽固醇計算":
-                        ldlCholesterol = sec.Entry[0].Reference.ToString();
+                        string ldlCholesterolId = sec.Entry[0].Reference.ToString();
+                        Observation ldlCholesterol = client.Read<Observation>(ldlCholesterolId);
+                        resultUploadDate = logic.AdToRocEra(ldlCholesterol.Issued.ToString());
+
+                        if (ldlCholesterol.Value is Quantity ldlCholesterolValue)
+                        {
+                            lowDensityLipoproteinCholesterol = ldlCholesterolValue.Value.ToString();
+                        }
                         break;
                     case "檢驗檢查-高密度膽固醇":
-                        hdlCholesterol = sec.Entry[0].Reference.ToString();
+                        string hdlCholesterolId = sec.Entry[0].Reference.ToString();
+                        Observation hdlCholesterol = client.Read<Observation>(hdlCholesterolId);
+                        resultUploadDate = logic.AdToRocEra(hdlCholesterol.Issued.ToString());
+
+                        if (hdlCholesterol.Value is Quantity hdlCholesterolValue)
+                        {
+                            highDensityLipoproteinCholesterol = hdlCholesterolValue.Value.ToString();
+                        }
                         break;
                     case "檢驗檢查-ＧＯＴ":
-                        got = sec.Entry[0].Reference.ToString();
+                        string gotId = sec.Entry[0].Reference.ToString();
+                        Observation got = client.Read<Observation>(gotId);
+                        resultUploadDate = logic.AdToRocEra(got.Issued.ToString());
+
+                        if (got.Value is Quantity gotValue)
+                        {
+                            GOT = gotValue.Value.ToString();
+                        }
                         break;
                     case "檢驗檢查-ＧＰＴ":
-                        gpt = sec.Entry[0].Reference.ToString();
+                        string gptId = sec.Entry[0].Reference.ToString();
+                        Observation gpt = client.Read<Observation>(gptId);
+                        resultUploadDate = logic.AdToRocEra(gpt.Issued.ToString());
+
+                        if (gpt.Value is Quantity gptValue)
+                        {
+                            GPT = gptValue.Value.ToString();
+                        }
                         break;
                     case "檢驗檢查-肌酸酐":
-                        creatinine = sec.Entry[0].Reference.ToString();
+                        string creatinineId = sec.Entry[0].Reference.ToString();
+                        Observation creat = client.Read<Observation>(creatinineId);
+                        resultUploadDate = logic.AdToRocEra(creat.Issued.ToString());
+
+                        if (creat.Value is Quantity creatinineValue)
+                        {
+                            creatinine = creatinineValue.Value.ToString();
+                        }
                         break;
                     case "檢驗檢查-腎絲球過濾率計算":
-                        egfr = sec.Entry[0].Reference.ToString();
+                        string egfrId = sec.Entry[0].Reference.ToString();
+                        Observation egfr = client.Read<Observation>(egfrId);
+                        resultUploadDate = logic.AdToRocEra(egfr.Issued.ToString());
+
+                        if (egfr.Value is Quantity egfrValue)
+                        {
+                            glomerularFiltrationRate = egfrValue.Value.ToString();
+                        }
                         break;
-                    case "檢驗檢查-Ｂ型肝炎表面抗原":
-                        hepatitisB = sec.Entry[0].Reference.ToString();
-                        break;
-                    case "檢驗檢查-Ｃ型肝炎病毒抗體":
-                        hepatitisC = sec.Entry[0].Reference.ToString();
-                        break;
-                    case "憂鬱檢測":
-                        depressionScreening = sec.Entry[0].Reference.ToString();
+                    //case "檢驗檢查-Ｂ型肝炎表面抗原":
+                    //    hepatitisB = sec.Entry[0].Reference.ToString();
+                    //    break;
+                    //case "檢驗檢查-Ｃ型肝炎病毒抗體":
+                    //    hepatitisC = sec.Entry[0].Reference.ToString();
+                    //    break;
+                    case "憂鬱檢測：感覺情緒低落沮喪與做事情失去興趣":
+                        string depressionId = sec.Entry[0].Reference.ToString();
+                        Observation depression = client.Read<Observation>(depressionId);
+
+                        foreach (var component in depression.Component)
+                        {
+                            if (component.Code.Coding[0].Code == "66446005")  //感覺情緒低落沮喪
+                            {
+                                if (component.Value is FhirString depressValue)
+                                {
+                                    lowMood = depressValue.ToString();
+                                }
+                            }
+                            if (component.Code.Coding[0].Code == "713566001")
+                            {
+                                if (component.Value is FhirString lossInterestValue)
+                                {
+                                    lossOfInterest = lossInterestValue.ToString();
+                                }
+                            }
+                        }
                         break;
                     case "生活史-吸煙":
-                        smoking = sec.Entry[0].Reference.ToString();
+                        string smokeId = sec.Entry[0].Reference.ToString();
+                        Observation smoke = client.Read<Observation>(smokeId);
+                        if (smoke.Value is FhirString smokeValue)
+                        {
+                            smoking = smokeValue.ToString();
+                        }
                         break;
                     case "生活史-喝酒":
-                        alcoholConsumption = sec.Entry[0].Reference.ToString();
+                        string alcoholId = sec.Entry[0].Reference.ToString();
+                        Observation alcohol = client.Read<Observation>(alcoholId);
+                        if (alcohol.Value is FhirString alcoholValue)
+                        {
+                            alcoholConsumption = alcoholValue.ToString();
+                        }
                         break;
                     case "生活史-嚼檳榔":
-                        betelNutChewing = sec.Entry[0].Reference.ToString();
+                        string betelNutId = sec.Entry[0].Reference.ToString();
+                        Observation betelNut = client.Read<Observation>(betelNutId);
+                        if (betelNut.Value is FhirString betelNutValue)
+                        {
+                            betelNutChewing = betelNutValue.ToString();
+                        }
                         break;
                     case "生活史-運動":
-                        exercise = sec.Entry[0].Reference.ToString();
+                        string exerId = sec.Entry[0].Reference.ToString();
+                        Observation exer = client.Read<Observation>(exerId);
+                        if (exer.Value is FhirString exerValue)
+                        {
+                            exercise =exerValue.ToString();
+                        }
                         break;
                     case "健康諮詢：戒煙":
-                        quitSmokingConsultation = sec.Entry[0].Reference.ToString();
+                        string quitSmokingConsultationId = sec.Entry[0].Reference.ToString();
+                        Observation quitSmokingConsultation = client.Read<Observation>(quitSmokingConsultationId);
+                        if (quitSmokingConsultation.Value is FhirString quitSmokingConsultationValue)
+                        {
+                            smokingCessationConsultation = quitSmokingConsultationValue.ToString();
+                        }
                         break;
                     case "健康諮詢：節酒":
-                        reduceAlcoholConsultation = sec.Entry[0].Reference.ToString();
+                        string alcoholReductionConsultationId = sec.Entry[0].Reference.ToString();
+                        Observation alcoholReduction = client.Read<Observation>(alcoholReductionConsultationId);
+                        if (alcoholReduction.Value is FhirString alcoholReductionConsultationValue)
+                        {
+                            alcoholReductionConsultation = alcoholReductionConsultationValue.ToString();
+                        }
                         break;
                     case "健康諮詢：戒檳榔":
-                        quitBetelNutConsultation = sec.Entry[0].Reference.ToString();
+                        string betelNutCessationConsultationId = sec.Entry[0].Reference.ToString();
+                        Observation betelNutCessation = client.Read<Observation>(betelNutCessationConsultationId);
+                        if (betelNutCessation.Value is FhirString betelNutCessationConsultationValue)
+                        {
+                            betelNutCessationConsultation = betelNutCessationConsultationValue.ToString();
+                        }
                         break;
                     case "健康諮詢：規律運動":
-                        regularExerciseConsultation = sec.Entry[0].Reference.ToString();
+                        string regularExerciseConsultationId = sec.Entry[0].Reference.ToString();
+                        Observation regularExercise = client.Read<Observation>(regularExerciseConsultationId);
+                        if (regularExercise.Value is FhirString regularExerciseConsultationValue)
+                        {
+                            regularExerciseConsultation = regularExerciseConsultationValue.ToString();
+                        }
                         break;
                     case "健康諮詢：維持正常體重":
-                        maintainNormalWeightConsultation = sec.Entry[0].Reference.ToString();
+                        string maintainNormalWeightConsultationId = sec.Entry[0].Reference.ToString();
+                        Observation maintainNormalWeight = client.Read<Observation>(maintainNormalWeightConsultationId);
+                        if (maintainNormalWeight.Value is FhirString maintainNormalWeightConsultationValue)
+                        {
+                            maintainNormalWeightConsultation = maintainNormalWeightConsultationValue.ToString();
+                        }
                         break;
                     case "健康諮詢：健康飲食":
-                        healthyDietConsultation = sec.Entry[0].Reference.ToString();
+                        string healthyDietConsultationId = sec.Entry[0].Reference.ToString();
+                        Observation healthyDiet = client.Read<Observation>(healthyDietConsultationId);
+                        if (healthyDiet.Value is FhirString healthyDietConsultationValue)
+                        {
+                            healthyDietConsultation = healthyDietConsultationValue.ToString();
+                        }
                         break;
                     case "健康諮詢：事故傷害預":
-                        accidentInjuryPreventionConsultation = sec.Entry[0].Reference.ToString();
+                        string accidentInjuryPreventionConsultationId = sec.Entry[0].Reference.ToString();
+                        Observation accidentInjuryPrevention = client.Read<Observation>(accidentInjuryPreventionConsultationId);
+                        if (accidentInjuryPrevention.Value is FhirString accidentInjuryPreventionConsultationValue)
+                        {
+                            accidentInjuryPreventionConsultation = accidentInjuryPreventionConsultationValue.ToString();
+                        }
                         break;
                     case "健康諮詢：口腔保健":
-                        oralCareConsultation = sec.Entry[0].Reference.ToString();
+                        string oralHealthCareConsultationId = sec.Entry[0].Reference.ToString();
+                        Observation oralHealthCare = client.Read<Observation>(oralHealthCareConsultationId);
+                        if (oralHealthCare.Value is FhirString oralHealthCareConsultationValue)
+                        {
+                            oralHealthCareConsultation = oralHealthCareConsultationValue.ToString();
+                        }
                         break;
                     case "檢查過B、C型肝炎":
-                        checkedHepatitisBC = sec.Entry[0].Reference.ToString();
+                        string checkBCTypeHepatitisId= sec.Entry[0].Reference.ToString();
+                        Observation checkBC = client.Read<Observation>(checkBCTypeHepatitisId);
+                        if (checkBC.Value is FhirString checkBCTypeHepatitisValue)
+                        {
+                            checkBCTypeHepatitis = checkBCTypeHepatitisValue.ToString();
+                        }
                         break;
                     case "血壓檢查結果與建議":
-                        bloodPressureCheckResult = sec.Entry[0].Reference.ToString();
+                        string bloodPressureResultAndRecommendationId = sec.Entry[0].Reference.ToString();
+                        DiagnosticReport bloodPressureReport = client.Read<DiagnosticReport>(bloodPressureResultAndRecommendationId);
+                        bloodPressureResultAndRecommendation = bloodPressureReport.Conclusion;
                         break;
                     case "血糖檢查結果判讀":
-                        bloodSugarCheckResult = sec.Entry[0].Reference.ToString();
+                        string bloodSugarResultInterpretationId = sec.Entry[0].Reference.ToString();
+                        DiagnosticReport bloodSugarReport = client.Read<DiagnosticReport>(bloodSugarResultInterpretationId);
+                        bloodSugarResultInterpretation = bloodSugarReport.Conclusion;
                         break;
                     case "血脂肪檢查結果判讀":
-                        lipidCheckResult = sec.Entry[0].Reference.ToString();
+                        string lipidProfileResultInterpretationId = sec.Entry[0].Reference.ToString();
+                        DiagnosticReport lipidProfileReport = client.Read<DiagnosticReport>(lipidProfileResultInterpretationId);
+                        lipidProfileResultInterpretation = lipidProfileReport.Conclusion;
                         break;
                     case "腎功能檢查結果判讀":
-                        kidneyFunctionCheckResult = sec.Entry[0].Reference.ToString();
+                        string kidneyFunctionResultInterpretationId = sec.Entry[0].Reference.ToString();
+                        DiagnosticReport kidneyFunctionReport = client.Read<DiagnosticReport>(kidneyFunctionResultInterpretationId);
+                        kidneyFunctionResultInterpretation = kidneyFunctionReport.Conclusion;
                         break;
                     case "肝功能檢查結果判讀":
-                        liverFunctionCheckResult = sec.Entry[0].Reference.ToString();
+                        string liverFunctionResultInterpretationId = sec.Entry[0].Reference.ToString();
+                        DiagnosticReport liverFunctionReport = client.Read<DiagnosticReport>(liverFunctionResultInterpretationId);
+                        liverFunctionResultInterpretation = liverFunctionReport.Conclusion;
                         break;
                     case "代謝症候群檢查結果與建議":
-                        metabolicSyndromeCheckResult = sec.Entry[0].Reference.ToString();
+                        string metabolicSyndromeResultAndRecommendationId = sec.Entry[0].Reference.ToString();
+                        DiagnosticReport metabolicSyndromeReport = client.Read<DiagnosticReport>(metabolicSyndromeResultAndRecommendationId);
+                        metabolicSyndromeResultAndRecommendation = metabolicSyndromeReport.Conclusion;
                         break;
-                    case "B型肝炎檢查結果與建議":
-                        hepatitisBCheckResult = sec.Entry[0].Reference.ToString();
-                        break;
-                    case "C型肝炎檢查結果與建議":
-                        hepatitisCCheckResult = sec.Entry[0].Reference.ToString();
-                        break;
+                    //case "B型肝炎檢查結果與建議":
+                    //    hepatitisBCheckResult = sec.Entry[0].Reference.ToString();
+                    //    break;
+                    //case "C型肝炎檢查結果與建議":
+                    //    hepatitisCCheckResult = sec.Entry[0].Reference.ToString();
+                    //    break;
                     case "憂鬱檢測結果與建議":
-                        depressionScreeningResult = sec.Entry[0].Reference.ToString();
+                        string depressionDetectionResultAndRecommendationId = sec.Entry[0].Reference.ToString();
+                        DiagnosticReport depressionDetectionReport = client.Read<DiagnosticReport>(depressionDetectionResultAndRecommendationId);
+                        depressionDetectionResultAndRecommendation = depressionDetectionReport.Conclusion;
                         break;
-                }
-                Console.WriteLine(com_id + "Finish!");
+                } 
             }
+            addExcel(worksheet, index, name, id, birthDate, gender, phone,firstCheckDate, secondCheckDate, 
+                resultUploadDate,checkBCTypeHepatitis, hypertensionHistory,diabetesHistory, hyperlipidemiaHistory, 
+                heartDisease,stroke, kidneyDisease, systolicPressure,diastolicPressure, highBloodPressure, threeHigh,
+                waistCircumference, BMI, smoking, alcoholConsumption,betelNutChewing, exercise, 
+                smokingCessationConsultation,alcoholReductionConsultation, betelNutCessationConsultation,
+                regularExerciseConsultation, maintainNormalWeightConsultation,healthyDietConsultation, 
+                accidentInjuryPreventionConsultation,oralHealthCareConsultation, hepatitisBSurfaceAntigen,
+                hepatitisCAntibody, lowMood, lossOfInterest, urineAcidityValue,urineProtein, urineSugar, 
+                urineSedimentMicroscopy, occultBlood, urineRedBloodCells, urineWhiteBloodCells, urineEpithelialCells,
+                cast, bacteria, appearance, hyperlipidemia, cholesterol, triglycerides, fastingBloodSugar, 
+                creatinine, GOT, GPT,highDensityLipoproteinCholesterol, lowDensityLipoproteinCholesterol,
+                glomerularFiltrationRate, liverFunctionResultInterpretation,bloodSugarResultInterpretation, 
+                lipidProfileResultInterpretation,kidneyFunctionResultInterpretation, 
+                bloodPressureResultAndRecommendation,metabolicSyndromeResultAndRecommendation, 
+                depressionDetectionResultAndRecommendation, com_id);
 
-            addExcel(worksheet, index, com_id, id, num, patient, enc, org1, org2,
-                        hypertension, diabetes, hyperlipidemia, heartDisease, stroke, kidneyDisease,
-                        height, weight, bmi, bloodPressure, waistCircumference,
-                        urineProtein, bloodSugar, cholesterol, triglycerides,
-                        ldlCholesterol, hdlCholesterol, got, gpt,
-                        creatinine, egfr, hepatitisB, hepatitisC,
-                        depressionScreening, smoking, alcoholConsumption, betelNutChewing,
-                        exercise, quitSmokingConsultation, reduceAlcoholConsultation,
-                        quitBetelNutConsultation, regularExerciseConsultation,
-                        maintainNormalWeightConsultation, healthyDietConsultation,
-                        accidentInjuryPreventionConsultation, oralCareConsultation,
-                        checkedHepatitisBC, bloodPressureCheckResult,
-                        bloodSugarCheckResult, lipidCheckResult, kidneyFunctionCheckResult,
-                        liverFunctionCheckResult, metabolicSyndromeCheckResult,
-                        hepatitisBCheckResult, hepatitisCCheckResult, depressionScreeningResult);
+            Console.WriteLine(com_id + "Finish!");
+
         }
 
-        public static ExcelWorksheet addExcel(ExcelWorksheet worksheet, int index, 
+        public static ExcelWorksheet addExcel_old(ExcelWorksheet worksheet, int index, 
             string com_id, string id, string count, string patient, string encounter, string hos, string test,
            string hypertension, string diabetes, string hyperlipidemia, string heartDisease, string stroke, string kidneyDisease,
             string height, string weight, string bmi, string bloodPressure, string waistCircumference,
@@ -371,6 +592,102 @@ namespace TestAdultCheck
             worksheet.Cells[index, 53].Value = depressionScreeningResult;
 
 
+
+            return worksheet;
+        }
+
+
+        public static ExcelWorksheet addExcel(ExcelWorksheet worksheet, int index,
+            string name, string id, string birthDate, string gender, string phone, 
+            string firstCheckDate, string secondCheckDate, string resultUploadDate, 
+            string checkBCTypeHepatitis, string hypertensionHistory, 
+            string diabetesHistory, string hyperlipidemiaHistory, string heartDisease, 
+            string stroke, string kidneyDisease, string systolicPressure, 
+            string diastolicPressure, string highBloodPressure, string threeHigh, 
+            string waistCircumference, string BMI, string smoking, string alcoholConsumption, 
+            string betelNutChewing, string exercise, string smokingCessationConsultation, 
+            string alcoholReductionConsultation, string betelNutCessationConsultation, 
+            string regularExerciseConsultation, string maintainNormalWeightConsultation, 
+            string healthyDietConsultation, string accidentInjuryPreventionConsultation, 
+            string oralHealthCareConsultation, string hepatitisBSurfaceAntigen, 
+            string hepatitisCAntibody, string lowMood, string lossOfInterest, string urineAcidityValue, 
+            string urineProtein, string urineSugar, string urineSedimentMicroscopy, string occultBlood, 
+            string urineRedBloodCells, string urineWhiteBloodCells, string urineEpithelialCells, 
+            string cast, string bacteria, string appearance, string hyperlipidemia, string cholesterol, 
+            string triglycerides, string fastingBloodSugar, string creatinine, string GOT, string GPT, 
+            string highDensityLipoproteinCholesterol, string lowDensityLipoproteinCholesterol, 
+            string glomerularFiltrationRate, string liverFunctionResultInterpretation, 
+            string bloodSugarResultInterpretation, string lipidProfileResultInterpretation, 
+            string kidneyFunctionResultInterpretation, string bloodPressureResultAndRecommendation, 
+            string metabolicSyndromeResultAndRecommendation, string depressionDetectionResultAndRecommendation, 
+            string com_id)
+        {
+            worksheet.Cells[index, 1].Value = name;
+            worksheet.Cells[index, 2].Value = id;
+            worksheet.Cells[index, 3].Value = birthDate;
+            worksheet.Cells[index, 4].Value = gender;
+            worksheet.Cells[index, 5].Value = phone;
+            worksheet.Cells[index, 6].Value = firstCheckDate;
+            worksheet.Cells[index, 7].Value = secondCheckDate;
+            worksheet.Cells[index, 8].Value = resultUploadDate;
+            worksheet.Cells[index, 9].Value = checkBCTypeHepatitis;
+            worksheet.Cells[index, 10].Value = hypertensionHistory;
+            worksheet.Cells[index, 11].Value = diabetesHistory;
+            worksheet.Cells[index, 12].Value = hyperlipidemiaHistory;
+            worksheet.Cells[index, 13].Value = heartDisease;
+            worksheet.Cells[index, 14].Value = stroke;
+            worksheet.Cells[index, 15].Value = kidneyDisease;
+            worksheet.Cells[index, 16].Value = systolicPressure;
+            worksheet.Cells[index, 17].Value = diastolicPressure;
+            worksheet.Cells[index, 18].Value = highBloodPressure;
+            worksheet.Cells[index, 19].Value = threeHigh;
+            worksheet.Cells[index, 20].Value = waistCircumference;
+            worksheet.Cells[index, 21].Value = BMI;
+            worksheet.Cells[index, 22].Value = smoking;
+            worksheet.Cells[index, 23].Value = alcoholConsumption;
+            worksheet.Cells[index, 24].Value = betelNutChewing;
+            worksheet.Cells[index, 25].Value = exercise;
+            worksheet.Cells[index, 26].Value = smokingCessationConsultation;
+            worksheet.Cells[index, 27].Value = alcoholReductionConsultation;
+            worksheet.Cells[index, 28].Value = betelNutCessationConsultation;
+            worksheet.Cells[index, 29].Value = regularExerciseConsultation;
+            worksheet.Cells[index, 30].Value = maintainNormalWeightConsultation;
+            worksheet.Cells[index, 31].Value = healthyDietConsultation;
+            worksheet.Cells[index, 32].Value = accidentInjuryPreventionConsultation;
+            worksheet.Cells[index, 33].Value = oralHealthCareConsultation;
+            worksheet.Cells[index, 34].Value = hepatitisBSurfaceAntigen;
+            worksheet.Cells[index, 35].Value = hepatitisCAntibody;
+            worksheet.Cells[index, 36].Value = lowMood;
+            worksheet.Cells[index, 37].Value = lossOfInterest;
+            worksheet.Cells[index, 38].Value = urineAcidityValue;
+            worksheet.Cells[index, 39].Value = urineProtein;
+            worksheet.Cells[index, 40].Value = urineSugar;
+            worksheet.Cells[index, 41].Value = urineSedimentMicroscopy;
+            worksheet.Cells[index, 42].Value = occultBlood;
+            worksheet.Cells[index, 43].Value = urineRedBloodCells;
+            worksheet.Cells[index, 44].Value = urineWhiteBloodCells;
+            worksheet.Cells[index, 45].Value = urineEpithelialCells;
+            worksheet.Cells[index, 46].Value = cast;
+            worksheet.Cells[index, 47].Value = bacteria;
+            worksheet.Cells[index, 48].Value = appearance;
+            worksheet.Cells[index, 49].Value = hyperlipidemia;
+            worksheet.Cells[index, 50].Value = cholesterol;
+            worksheet.Cells[index, 51].Value = triglycerides;
+            worksheet.Cells[index, 52].Value = fastingBloodSugar;
+            worksheet.Cells[index, 53].Value = creatinine;
+            worksheet.Cells[index, 54].Value = GOT;
+            worksheet.Cells[index, 55].Value = GPT;
+            worksheet.Cells[index, 56].Value = highDensityLipoproteinCholesterol;
+            worksheet.Cells[index, 57].Value = lowDensityLipoproteinCholesterol;
+            worksheet.Cells[index, 58].Value = glomerularFiltrationRate;
+            worksheet.Cells[index, 59].Value = liverFunctionResultInterpretation;
+            worksheet.Cells[index, 60].Value = bloodSugarResultInterpretation;
+            worksheet.Cells[index, 61].Value = lipidProfileResultInterpretation;
+            worksheet.Cells[index, 62].Value = kidneyFunctionResultInterpretation;
+            worksheet.Cells[index, 63].Value = bloodPressureResultAndRecommendation;
+            worksheet.Cells[index, 64].Value = metabolicSyndromeResultAndRecommendation;
+            worksheet.Cells[index, 65].Value = depressionDetectionResultAndRecommendation;
+            worksheet.Cells[index, 66].Value = com_id;
 
             return worksheet;
         }
