@@ -2,6 +2,8 @@
 using Hl7.Fhir.Rest;
 using OfficeOpenXml;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace TestAdultCheck
 {
@@ -13,23 +15,18 @@ namespace TestAdultCheck
 
         static async System.Threading.Tasks.Task Main(string[] args)
         {
+
+
             string token = secret.token;
-            string[] orgIds = {"1539335"};  //海端1539335  //延平3983763
+            string[] orgIds = { "1539335" };  //海端1539335  //延平3983763
             string fhirserver = secret.fhirserver;
             string monthanddate = System.DateTime.Now.ToString("MMdd");
-            string excelFilePath = root + "衛生所成健_"+ monthanddate + ".xlsx";
-            int index = 2;
-
-            var settings = new FhirClientSettings
-            {
-                Timeout = 200000
-            };
+            string excelFilePath = root + "衛生所成健_DE_" + monthanddate + ".xlsx";
 
             var handler = new AuthorizationMessageHandler();
             handler.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            // var client = new FhirClient(fhirserver, FhirClientSettings.CreateDefault(), handler); 
-            var client = new FhirClient(fhirserver, settings, handler); 
+            var client = new FhirClient(fhirserver, FhirClientSettings.CreateDefault(), handler);
 
             FileInfo excelFile = new FileInfo(excelFilePath);
             if (excelFile.Exists)
@@ -40,33 +37,47 @@ namespace TestAdultCheck
 
             ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
             ExcelPackage package = new ExcelPackage(excelFile);
-
-            foreach (string id in orgIds)
+            try
             {
-                ExcelWorksheet worksheet = package.Workbook.Worksheets.Add(logic.GetOrgName(id));
-                InitialExcel(worksheet);  //初始化: 產生表頭
-
-                var searchParams = new SearchParams();
-                searchParams.Add("_total", "accurate"); 
-                searchParams.Add("author", "Organization/" + id); 
-
-                Bundle results = client.Search<Composition>(searchParams);
-
-                Console.WriteLine(logic.GetOrgName(id)+ "總比數: " + results.Total);
-
-                while (results != null)
+                foreach (string id in orgIds)
                 {
-                    foreach (Bundle.EntryComponent entry in results.Entry)
+                    int index = 2;
+
+                    ExcelWorksheet worksheet = package.Workbook.Worksheets.Add(logic.GetOrgName(id));
+                    InitialExcel(worksheet);  //初始化: 產生表頭
+
+                    var searchParams = new SearchParams();
+                    searchParams.Add("_total", "accurate");
+                    searchParams.Add("author", "Organization/" + id);
+
+                    Bundle results = client.Search<Composition>(searchParams);
+
+                    Console.WriteLine(logic.GetOrgName(id) + "總比數: " + results.Total);
+
+                    while (results != null)
                     {
-                        Composition comp = (Composition)entry.Resource;
-                        FillExcel(comp, worksheet, index, client);
-                        index++;
+                        foreach (Bundle.EntryComponent entry in results.Entry)
+                        {
+                            Composition comp = (Composition)entry.Resource;
+                            FillExcel(comp, worksheet, index, client);
+                            index++;
+                        }
+
+                        results = logic.GetNextPages(results, client);
+                        Console.WriteLine(results);
                     }
-                    results = await client.ContinueAsync(results);
                 }
+                package.Save();  //儲存excel
             }
-                      
-            package.Save();  //儲存excel
+            catch (Exception e)
+            {
+                Console.WriteLine("Error:" + e.Message);
+            }
+            finally
+            {
+                package.Save();  //儲存excel
+            }
+
         }
 
         public class AuthorizationMessageHandler : HttpClientHandler
@@ -99,7 +110,7 @@ namespace TestAdultCheck
         public static void FillExcel(Composition comp, ExcelWorksheet worksheet, int index, FhirClient client)
         {
             string com_id = comp.Id;
-            string num = comp.Section.Count.ToString();
+            // string num = comp.Section.Count.ToString();
 
             string name = string.Empty, id = string.Empty, birthDate = string.Empty, gender = string.Empty,
                 phone = string.Empty, firstCheckDate = string.Empty, secondCheckDate = string.Empty,
@@ -149,6 +160,8 @@ namespace TestAdultCheck
                 
             }
 
+            Console.WriteLine(name);
+
             string encId = comp.Encounter.Reference.ToString();
             Encounter enc = client.Read<Encounter>(encId);
             Encounter.StatusHistoryComponent first = enc.StatusHistory[0];  //第一階段檢查日期
@@ -157,7 +170,7 @@ namespace TestAdultCheck
                 Encounter.StatusHistoryComponent second = enc.StatusHistory[1]; //第二階段檢查日期
                 secondCheckDate = logic.AdToRocEra(second.Period.Start);
             } 
-            firstCheckDate = logic.AdToRocEra(first.Period.Start);                  
+            firstCheckDate = logic.AdToRocEra(first.Period.Start);
 
             foreach (var sec in comp.Section)
             {
@@ -516,7 +529,7 @@ namespace TestAdultCheck
                 bloodPressureResultAndRecommendation,metabolicSyndromeResultAndRecommendation, 
                 depressionDetectionResultAndRecommendation, com_id);
 
-            Console.WriteLine(com_id + "Finish!");
+            Console.WriteLine(index + "_" + com_id + "Finish!");
 
         }
 
@@ -691,6 +704,7 @@ namespace TestAdultCheck
 
             return worksheet;
         }
+
 
     }
 }
