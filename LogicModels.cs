@@ -1,13 +1,17 @@
 ﻿using Hl7.Fhir.Model;
 using Hl7.Fhir.Rest;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Web;
 
 namespace TestAdultCheck
 
 {
     class LogicModels
-    { 
+    {
+        static DataService secret = new DataService();
+
         public string ChangeGender(AdministrativeGender? gender)
         {
             string result = null;
@@ -81,6 +85,33 @@ namespace TestAdultCheck
             Console.WriteLine("next page: " + nextLink);
 
             return client.Search<Composition>(searchParams);
+        }
+
+        public string DecryptStringFromBytes_Aes(string cipherText)
+        {
+            string key = secret.secret;
+
+            byte[] keyBytes = Encoding.UTF8.GetBytes(key.Substring(0, 16));
+            byte[] cipherBytes = Convert.FromBase64String(cipherText);
+
+            using (Aes aes = Aes.Create())
+            {
+                aes.Mode = CipherMode.ECB;
+                aes.KeySize = 128;
+                aes.Key = keyBytes;
+                aes.Padding = PaddingMode.PKCS7;
+
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    using (CryptoStream cs = new CryptoStream(ms, aes.CreateDecryptor(), CryptoStreamMode.Write))
+                    {
+                        cs.Write(cipherBytes, 0, cipherBytes.Length);
+                        cs.Close();
+                    }
+                    byte[] decryptedBytes = ms.ToArray();
+                    return Encoding.UTF8.GetString(decryptedBytes);
+                }
+            }
         }
     }
 }

@@ -1,11 +1,7 @@
-﻿using Hl7.Fhir.Language.Debugging;
-using Hl7.Fhir.Model;
+﻿using Hl7.Fhir.Model;
 using Hl7.Fhir.Rest;
 using OfficeOpenXml;
-using System.IO;
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace TestAdultCheck
 {
@@ -145,19 +141,19 @@ namespace TestAdultCheck
             Patient pat = client.Read<Patient>(patientId);
             if (pat != null)
             {
-                name = DecryptStringFromBytes_Aes(pat.Name[0].Text); //姓名
+                name = logic.DecryptStringFromBytes_Aes(pat.Name[0].Text); //姓名
                 foreach (Identifier identifier in pat.Identifier)
                 {
                     if (identifier.System == "http://www.moi.gov.tw/")
                     {
-                        id = DecryptStringFromBytes_Aes(identifier.Value); //身分證字號
+                        id = logic.DecryptStringFromBytes_Aes(identifier.Value); //身分證字號
                     }
                 }
                 birthDate = pat.BirthDate;
                 gender = logic.ChangeGender(pat.Gender);
                 if (pat.Telecom != null && pat.Telecom.Count > 0)
                 {
-                    phone = DecryptStringFromBytes_Aes(pat.Telecom[0].Value);
+                    phone = logic.DecryptStringFromBytes_Aes(pat.Telecom[0].Value);
                 }
                 
             }
@@ -705,32 +701,7 @@ namespace TestAdultCheck
             return worksheet;
         }
 
-        static string DecryptStringFromBytes_Aes(string cipherText)
-        {
-            string key = secret.secret;
-
-            byte[] keyBytes = Encoding.UTF8.GetBytes(key.Substring(0,16));
-            byte[] cipherBytes = Convert.FromBase64String(cipherText);
-
-            using (Aes aes = Aes.Create())
-            {
-                aes.Mode = CipherMode.ECB;
-                aes.KeySize = 128;
-                aes.Key = keyBytes;
-                aes.Padding = PaddingMode.PKCS7;
-
-                using (MemoryStream ms = new MemoryStream())
-                {
-                    using (CryptoStream cs = new CryptoStream(ms, aes.CreateDecryptor(), CryptoStreamMode.Write))
-                    {
-                        cs.Write(cipherBytes, 0, cipherBytes.Length);
-                        cs.Close();
-                    }
-                    byte[] decryptedBytes = ms.ToArray();
-                    return Encoding.UTF8.GetString(decryptedBytes);
-                }
-            }
-        }
+        
     
 
     }
