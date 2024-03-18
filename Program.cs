@@ -1,6 +1,8 @@
-﻿using Hl7.Fhir.Model;
+﻿using Hl7.Fhir.Language.Debugging;
+using Hl7.Fhir.Model;
 using Hl7.Fhir.Rest;
 using OfficeOpenXml;
+using System.IO;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
@@ -18,7 +20,7 @@ namespace TestAdultCheck
 
 
             string token = secret.token;
-            string[] orgIds = { "1539335" };  //海端1539335  //延平3983763
+            string[] orgIds = {"1539335"};  //海端1539335  //延平3983763
             string fhirserver = secret.fhirserver;
             string monthanddate = System.DateTime.Now.ToString("MMdd");
             string excelFilePath = root + "衛生所成健_DE_" + monthanddate + ".xlsx";
@@ -143,24 +145,22 @@ namespace TestAdultCheck
             Patient pat = client.Read<Patient>(patientId);
             if (pat != null)
             {
-                name = pat.Name[0].Text;  //姓名
+                name = DecryptStringFromBytes_Aes(pat.Name[0].Text); //姓名
                 foreach (Identifier identifier in pat.Identifier)
                 {
                     if (identifier.System == "http://www.moi.gov.tw/")
                     {
-                        id = identifier.Value;  //身分證字號
+                        id = DecryptStringFromBytes_Aes(identifier.Value); //身分證字號
                     }
                 }
                 birthDate = pat.BirthDate;
                 gender = logic.ChangeGender(pat.Gender);
                 if (pat.Telecom != null && pat.Telecom.Count > 0)
                 {
-                    phone = pat.Telecom[0].Value;
+                    phone = DecryptStringFromBytes_Aes(pat.Telecom[0].Value);
                 }
                 
             }
-
-            Console.WriteLine(name);
 
             string encId = comp.Encounter.Reference.ToString();
             Encounter enc = client.Read<Encounter>(encId);
@@ -203,7 +203,7 @@ namespace TestAdultCheck
                     case "生理量測-BMI":
                         string bmiId = sec.Entry[0].Reference.ToString();
                         Observation bmi = client.Read<Observation>(bmiId);
-                        if (bmi.Value is Quantity bmiValue)
+                        if (bmi.Value is Hl7.Fhir.Model.Quantity bmiValue)
                         {
                             BMI = bmiValue.Value.ToString();
                         }
@@ -216,14 +216,14 @@ namespace TestAdultCheck
                         {
                             if (component.Code.Coding[0].Code == "8480-6")
                             {
-                                if (component.Value is Quantity systolicValue)
+                                if (component.Value is Hl7.Fhir.Model.Quantity systolicValue)
                                 {
                                     systolicPressure = systolicValue.Value.ToString();
                                 }                               
                             }
                             if (component.Code.Coding[0].Code == "8462-4")
                             {
-                                if (component.Value is Quantity diastolicValue)
+                                if (component.Value is Hl7.Fhir.Model.Quantity diastolicValue)
                                 {
                                     diastolicPressure = diastolicValue.Value.ToString();
                                 }
@@ -234,7 +234,7 @@ namespace TestAdultCheck
                         string waistId = sec.Entry[0].Reference.ToString();
                         Observation waist = client.Read<Observation>(waistId);
 
-                        if (waist.Value is Quantity waisyValue)
+                        if (waist.Value is Hl7.Fhir.Model.Quantity waisyValue)
                         {
                             waistCircumference = waisyValue.Value.ToString();
                         }
@@ -243,7 +243,7 @@ namespace TestAdultCheck
                         string urineProteinId = sec.Entry[0].Reference.ToString();
                         Observation urine = client.Read<Observation>(urineProteinId);
 
-                        if (urine.Value is Quantity upValue)
+                        if (urine.Value is Hl7.Fhir.Model.Quantity upValue)
                         {
                             urineProtein = upValue.Value.ToString();
                         }
@@ -253,7 +253,7 @@ namespace TestAdultCheck
                         Observation sugar = client.Read<Observation>(bloodSugarId);
                         resultUploadDate = logic.AdToRocEra(sugar.Issued.ToString());
 
-                        if (sugar.Value is Quantity sugarValue)
+                        if (sugar.Value is Hl7.Fhir.Model.Quantity sugarValue)
                         {
                             fastingBloodSugar = sugarValue.Value.ToString();
                         }
@@ -263,7 +263,7 @@ namespace TestAdultCheck
                         Observation chol = client.Read<Observation>(cholesterolId);
                         resultUploadDate = logic.AdToRocEra(chol.Issued.ToString());
 
-                        if (chol.Value is Quantity cholValue)
+                        if (chol.Value is Hl7.Fhir.Model.Quantity cholValue)
                         {
                             cholesterol = cholValue.Value.ToString();
                         }
@@ -273,7 +273,7 @@ namespace TestAdultCheck
                         Observation tri = client.Read<Observation>(triglyceridesId);
                         resultUploadDate = logic.AdToRocEra(tri.Issued.ToString());
 
-                        if (tri.Value is Quantity triValue)
+                        if (tri.Value is Hl7.Fhir.Model.Quantity triValue)
                         {
                             triglycerides = triValue.Value.ToString();
                         }
@@ -283,7 +283,7 @@ namespace TestAdultCheck
                         Observation ldlCholesterol = client.Read<Observation>(ldlCholesterolId);
                         resultUploadDate = logic.AdToRocEra(ldlCholesterol.Issued.ToString());
 
-                        if (ldlCholesterol.Value is Quantity ldlCholesterolValue)
+                        if (ldlCholesterol.Value is Hl7.Fhir.Model.Quantity ldlCholesterolValue)
                         {
                             lowDensityLipoproteinCholesterol = ldlCholesterolValue.Value.ToString();
                         }
@@ -293,7 +293,7 @@ namespace TestAdultCheck
                         Observation hdlCholesterol = client.Read<Observation>(hdlCholesterolId);
                         resultUploadDate = logic.AdToRocEra(hdlCholesterol.Issued.ToString());
 
-                        if (hdlCholesterol.Value is Quantity hdlCholesterolValue)
+                        if (hdlCholesterol.Value is Hl7.Fhir.Model.Quantity hdlCholesterolValue)
                         {
                             highDensityLipoproteinCholesterol = hdlCholesterolValue.Value.ToString();
                         }
@@ -303,7 +303,7 @@ namespace TestAdultCheck
                         Observation got = client.Read<Observation>(gotId);
                         resultUploadDate = logic.AdToRocEra(got.Issued.ToString());
 
-                        if (got.Value is Quantity gotValue)
+                        if (got.Value is Hl7.Fhir.Model.Quantity gotValue)
                         {
                             GOT = gotValue.Value.ToString();
                         }
@@ -313,7 +313,7 @@ namespace TestAdultCheck
                         Observation gpt = client.Read<Observation>(gptId);
                         resultUploadDate = logic.AdToRocEra(gpt.Issued.ToString());
 
-                        if (gpt.Value is Quantity gptValue)
+                        if (gpt.Value is Hl7.Fhir.Model.Quantity gptValue)
                         {
                             GPT = gptValue.Value.ToString();
                         }
@@ -323,7 +323,7 @@ namespace TestAdultCheck
                         Observation creat = client.Read<Observation>(creatinineId);
                         resultUploadDate = logic.AdToRocEra(creat.Issued.ToString());
 
-                        if (creat.Value is Quantity creatinineValue)
+                        if (creat.Value is Hl7.Fhir.Model.Quantity creatinineValue)
                         {
                             creatinine = creatinineValue.Value.ToString();
                         }
@@ -333,7 +333,7 @@ namespace TestAdultCheck
                         Observation egfr = client.Read<Observation>(egfrId);
                         resultUploadDate = logic.AdToRocEra(egfr.Issued.ToString());
 
-                        if (egfr.Value is Quantity egfrValue)
+                        if (egfr.Value is Hl7.Fhir.Model.Quantity egfrValue)
                         {
                             glomerularFiltrationRate = egfrValue.Value.ToString();
                         }
@@ -705,6 +705,33 @@ namespace TestAdultCheck
             return worksheet;
         }
 
+        static string DecryptStringFromBytes_Aes(string cipherText)
+        {
+            string key = secret.secret;
+
+            byte[] keyBytes = Encoding.UTF8.GetBytes(key.Substring(0,16));
+            byte[] cipherBytes = Convert.FromBase64String(cipherText);
+
+            using (Aes aes = Aes.Create())
+            {
+                aes.Mode = CipherMode.ECB;
+                aes.KeySize = 128;
+                aes.Key = keyBytes;
+                aes.Padding = PaddingMode.PKCS7;
+
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    using (CryptoStream cs = new CryptoStream(ms, aes.CreateDecryptor(), CryptoStreamMode.Write))
+                    {
+                        cs.Write(cipherBytes, 0, cipherBytes.Length);
+                        cs.Close();
+                    }
+                    byte[] decryptedBytes = ms.ToArray();
+                    return Encoding.UTF8.GetString(decryptedBytes);
+                }
+            }
+        }
+    
 
     }
 }
