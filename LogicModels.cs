@@ -32,10 +32,10 @@ namespace TestAdultCheck
             string result = null;
             switch (id)
             {
-                case "1539335":
+                case "177246":
                     result = "海端衛生所";
                     break;
-                case "3983763":
+                case "2":
                     result = "延平衛生所";
                     break;
             }
@@ -65,7 +65,15 @@ namespace TestAdultCheck
             {
                 if(link.Relation == "next")
                 {
-                    nextLink = link.Url.Replace("http", "https");
+                    if (!link.Url.Contains("https"))
+                    {
+                        nextLink = link.Url.Replace("http", "https");
+                    }
+                    else
+                    {
+                        nextLink = link.Url;
+                    }
+                    
                 }
             }
             if(nextLink == null) { 
@@ -78,13 +86,13 @@ namespace TestAdultCheck
             var searchParams = new SearchParams();
             searchParams.Add("_getpages", getpages);
             searchParams.Add("_getpagesoffset", getpagesoffset);  //Important
-            searchParams.Add("_count", "50");
+            searchParams.Add("_count", "10");
             searchParams.Add("_pretty", "true");
             searchParams.Add("_bundletype", "searchset");
 
             Console.WriteLine("next page: " + nextLink);
 
-            return client.Search<Composition>(searchParams);
+            return client.Search(searchParams);
         }
 
         public string DecryptStringFromBytes_Aes(string cipherText)

@@ -1,6 +1,7 @@
 ﻿using Hl7.Fhir.Model;
 using Hl7.Fhir.Rest;
 using OfficeOpenXml;
+using System.Diagnostics.Metrics;
 using System.Net.Http.Headers;
 
 namespace TestAdultCheck
@@ -14,12 +15,11 @@ namespace TestAdultCheck
         static async System.Threading.Tasks.Task Main(string[] args)
         {
 
-
             string token = secret.token;
-            string[] orgIds = {"1539335"};  //海端1539335  //延平3983763
+            string[] orgIds = { "2" };  //海端177246  //延平2
             string fhirserver = secret.fhirserver;
             string monthanddate = System.DateTime.Now.ToString("MMdd");
-            string excelFilePath = root + "衛生所成健_DE_" + monthanddate + ".xlsx";
+            string excelFilePath = root + "台東衛生所成健_延平" + monthanddate + ".xlsx";
 
             var handler = new AuthorizationMessageHandler();
             handler.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -47,23 +47,25 @@ namespace TestAdultCheck
                     var searchParams = new SearchParams();
                     searchParams.Add("_total", "accurate");
                     searchParams.Add("author", "Organization/" + id);
+                    searchParams.Count = 10;
 
                     Bundle results = client.Search<Composition>(searchParams);
 
                     Console.WriteLine(logic.GetOrgName(id) + "總比數: " + results.Total);
 
-                    while (results != null)
+                    int? total = results.Total;
+
+                    while (index-1 <= total)
                     {
                         foreach (Bundle.EntryComponent entry in results.Entry)
                         {
                             Composition comp = (Composition)entry.Resource;
-                            FillExcel(comp, worksheet, index, client);
+                            FillExcel(comp, worksheet, index, client);  //取得資料且寫入excel
                             index++;
                         }
-
                         results = logic.GetNextPages(results, client);
-                        Console.WriteLine(results);
                     }
+
                 }
                 package.Save();  //儲存excel
             }
@@ -108,7 +110,6 @@ namespace TestAdultCheck
         public static void FillExcel(Composition comp, ExcelWorksheet worksheet, int index, FhirClient client)
         {
             string com_id = comp.Id;
-            // string num = comp.Section.Count.ToString();
 
             string name = string.Empty, id = string.Empty, birthDate = string.Empty, gender = string.Empty,
                 phone = string.Empty, firstCheckDate = string.Empty, secondCheckDate = string.Empty,
@@ -160,13 +161,17 @@ namespace TestAdultCheck
 
             string encId = comp.Encounter.Reference.ToString();
             Encounter enc = client.Read<Encounter>(encId);
-            Encounter.StatusHistoryComponent first = enc.StatusHistory[0];  //第一階段檢查日期
-            if(enc.StatusHistory.Count > 1)
+
+            if (enc.StatusHistory != null && enc.StatusHistory.Count > 0)
             {
-                Encounter.StatusHistoryComponent second = enc.StatusHistory[1]; //第二階段檢查日期
-                secondCheckDate = logic.AdToRocEra(second.Period.Start);
-            } 
-            firstCheckDate = logic.AdToRocEra(first.Period.Start);
+                Encounter.StatusHistoryComponent first = enc.StatusHistory[0];  //第一階段檢查日期
+                if (enc.StatusHistory.Count > 1)
+                {
+                    Encounter.StatusHistoryComponent second = enc.StatusHistory[1]; //第二階段檢查日期
+                    secondCheckDate = logic.AdToRocEra(second.Period.Start);
+                }
+                firstCheckDate = logic.AdToRocEra(first.Period.Start);
+            }
 
             foreach (var sec in comp.Section)
             {
@@ -509,6 +514,7 @@ namespace TestAdultCheck
                         break;
                 } 
             }
+
             addExcel(worksheet, index, name, id, birthDate, gender, phone,firstCheckDate, secondCheckDate, 
                 resultUploadDate,checkBCTypeHepatitis, hypertensionHistory,diabetesHistory, hyperlipidemiaHistory, 
                 heartDisease,stroke, kidneyDisease, systolicPressure,diastolicPressure, highBloodPressure, threeHigh,
@@ -528,83 +534,6 @@ namespace TestAdultCheck
             Console.WriteLine(index + "_" + com_id + "Finish!");
 
         }
-
-        public static ExcelWorksheet addExcel_old(ExcelWorksheet worksheet, int index, 
-            string com_id, string id, string count, string patient, string encounter, string hos, string test,
-           string hypertension, string diabetes, string hyperlipidemia, string heartDisease, string stroke, string kidneyDisease,
-            string height, string weight, string bmi, string bloodPressure, string waistCircumference,
-            string urineProtein, string bloodSugar, string cholesterol, string triglycerides,
-            string ldlCholesterol, string hdlCholesterol, string got, string gpt,
-            string creatinine, string egfr, string hepatitisB, string hepatitisC,
-            string depressionScreening, string smoking, string alcoholConsumption, string betelNutChewing,
-            string exercise, string quitSmokingConsultation, string reduceAlcoholConsultation,
-            string quitBetelNutConsultation, string regularExerciseConsultation,
-            string maintainNormalWeightConsultation, string healthyDietConsultation,
-            string accidentInjuryPreventionConsultation, string oralCareConsultation,
-            string checkedHepatitisBC, string bloodPressureCheckResult,
-            string bloodSugarCheckResult, string lipidCheckResult, string kidneyFunctionCheckResult,
-            string liverFunctionCheckResult, string metabolicSyndromeCheckResult,
-            string hepatitisBCheckResult, string hepatitisCCheckResult, string depressionScreeningResult) 
-        {
-            worksheet.Cells[index, 1].Value = com_id;
-            worksheet.Cells[index, 2].Value = id;
-            worksheet.Cells[index, 3].Value = count;
-            worksheet.Cells[index, 4].Value = patient;
-            worksheet.Cells[index, 5].Value = encounter;
-            worksheet.Cells[index, 6].Value = hos;
-            worksheet.Cells[index, 7].Value = test;
-            worksheet.Cells[index, 8].Value = hypertension;
-            worksheet.Cells[index, 9].Value = diabetes;
-            worksheet.Cells[index, 10].Value = hyperlipidemia;
-            worksheet.Cells[index, 11].Value = heartDisease;
-            worksheet.Cells[index, 12].Value = stroke;
-            worksheet.Cells[index, 13].Value = kidneyDisease;
-            worksheet.Cells[index, 14].Value = height;
-            worksheet.Cells[index, 15].Value = weight;
-            worksheet.Cells[index, 16].Value = bmi;
-            worksheet.Cells[index, 17].Value = bloodPressure;
-            worksheet.Cells[index, 18].Value = waistCircumference;
-            worksheet.Cells[index, 19].Value = urineProtein;
-            worksheet.Cells[index, 20].Value = bloodSugar;
-            worksheet.Cells[index, 21].Value = cholesterol;
-            worksheet.Cells[index, 22].Value = triglycerides;
-            worksheet.Cells[index, 23].Value = ldlCholesterol;
-            worksheet.Cells[index, 24].Value = hdlCholesterol;
-            worksheet.Cells[index, 25].Value = got;
-            worksheet.Cells[index, 26].Value = gpt;
-            worksheet.Cells[index, 27].Value = creatinine;
-            worksheet.Cells[index, 28].Value = egfr;
-            worksheet.Cells[index, 29].Value = hepatitisB;
-            worksheet.Cells[index, 30].Value = hepatitisC;
-            worksheet.Cells[index, 31].Value = depressionScreening;
-            worksheet.Cells[index, 32].Value = smoking;
-            worksheet.Cells[index, 33].Value = alcoholConsumption;
-            worksheet.Cells[index, 34].Value = betelNutChewing;
-            worksheet.Cells[index, 35].Value = exercise;
-            worksheet.Cells[index, 36].Value = quitSmokingConsultation;
-            worksheet.Cells[index, 37].Value = reduceAlcoholConsultation;
-            worksheet.Cells[index, 38].Value = quitBetelNutConsultation;
-            worksheet.Cells[index, 39].Value = regularExerciseConsultation;
-            worksheet.Cells[index, 40].Value = maintainNormalWeightConsultation;
-            worksheet.Cells[index, 41].Value = healthyDietConsultation;
-            worksheet.Cells[index, 42].Value = accidentInjuryPreventionConsultation;
-            worksheet.Cells[index, 43].Value = oralCareConsultation;
-            worksheet.Cells[index, 44].Value = checkedHepatitisBC;
-            worksheet.Cells[index, 45].Value = bloodPressureCheckResult;
-            worksheet.Cells[index, 46].Value = bloodSugarCheckResult;
-            worksheet.Cells[index, 47].Value = lipidCheckResult;
-            worksheet.Cells[index, 48].Value = kidneyFunctionCheckResult;
-            worksheet.Cells[index, 49].Value = liverFunctionCheckResult;
-            worksheet.Cells[index, 50].Value = metabolicSyndromeCheckResult;
-            worksheet.Cells[index, 51].Value = hepatitisBCheckResult;
-            worksheet.Cells[index, 52].Value = hepatitisCCheckResult;
-            worksheet.Cells[index, 53].Value = depressionScreeningResult;
-
-
-
-            return worksheet;
-        }
-
 
         public static ExcelWorksheet addExcel(ExcelWorksheet worksheet, int index,
             string name, string id, string birthDate, string gender, string phone, 
