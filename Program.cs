@@ -1,7 +1,6 @@
 ﻿using Hl7.Fhir.Model;
 using Hl7.Fhir.Rest;
 using OfficeOpenXml;
-using System.Diagnostics.Metrics;
 using System.Net.Http.Headers;
 
 namespace TestAdultCheck
@@ -16,10 +15,10 @@ namespace TestAdultCheck
         {
 
             string token = secret.token;
-            string[] orgIds = { "2" };  //海端177246  //延平2
+            string[] orgIds = { "177246" };  //海端177246  //延平2
             string fhirserver = secret.fhirserver;
             string monthanddate = System.DateTime.Now.ToString("MMdd");
-            string excelFilePath = root + "台東衛生所成健_延平" + monthanddate + ".xlsx";
+            string excelFilePath = root + "台東衛生所成健_" + monthanddate + ".xlsx";
 
             var handler = new AuthorizationMessageHandler();
             handler.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -39,6 +38,7 @@ namespace TestAdultCheck
             {
                 foreach (string id in orgIds)
                 {
+                    // ExpiredContinue(package, client, id, "94813174-bbec-4384-9688-9e7caddb9b41", "3170", 3172);
                     int index = 2;
 
                     ExcelWorksheet worksheet = package.Workbook.Worksheets.Add(logic.GetOrgName(id));
@@ -55,12 +55,12 @@ namespace TestAdultCheck
 
                     int? total = results.Total;
 
-                    while (index-1 <= total)
+                    while (index - 1 <= total)
                     {
                         foreach (Bundle.EntryComponent entry in results.Entry)
                         {
                             Composition comp = (Composition)entry.Resource;
-                            FillExcel(comp, worksheet, index, client);  //取得資料且寫入excel
+                            FillExcel(comp, worksheet, index, client, true);  //取得資料且寫入excel
                             index++;
                         }
                         results = logic.GetNextPages(results, client);
@@ -91,6 +91,39 @@ namespace TestAdultCheck
             }
         }
 
+        public static void ExpiredContinue(ExcelPackage package, FhirClient client, 
+            string id, string pageId, string offset, int index)
+        {
+
+            ExcelWorksheet worksheet = package.Workbook.Worksheets[logic.GetOrgName(id)];
+
+            var searchParams = new SearchParams();
+            searchParams.Add("_total", "accurate");
+            searchParams.Add("_getpages", pageId);
+            searchParams.Add("_getpagesoffset", offset);  //Important
+            searchParams.Add("_count", "10");
+            searchParams.Add("_pretty", "true");
+            searchParams.Add("_bundletype", "searchset");
+
+            Bundle results = client.Search(searchParams);
+
+            Console.WriteLine(logic.GetOrgName(id) + "總比數: " + results.Total);
+
+            int? total = results.Total;
+
+            while (index - 1 <= total)
+            {
+                foreach (Bundle.EntryComponent entry in results.Entry)
+                {
+                    Composition comp = (Composition)entry.Resource;
+                    FillExcel(comp, worksheet, index, client, true);  //取得資料且寫入excel
+                    index++;
+                }
+                results = logic.GetNextPages(results, client);
+            }
+
+        }
+
         public static void InitialExcel(ExcelWorksheet worksheet)
         {
             addExcel(worksheet, 1, "姓名", "身分證號", "出生日期", "性別", "電話", "第一階段檢查日期",
@@ -107,7 +140,7 @@ namespace TestAdultCheck
 
         }
 
-        public static void FillExcel(Composition comp, ExcelWorksheet worksheet, int index, FhirClient client)
+        public static void FillExcel(Composition comp, ExcelWorksheet worksheet, int index, FhirClient client, bool decryp)
         {
             string com_id = comp.Id;
 
@@ -124,11 +157,11 @@ namespace TestAdultCheck
                 maintainNormalWeightConsultation = string.Empty, healthyDietConsultation = string.Empty,
                 accidentInjuryPreventionConsultation = string.Empty, oralHealthCareConsultation = string.Empty,
                 hepatitisBSurfaceAntigen = "未執行", hepatitisCAntibody = "未執行", lowMood = string.Empty,
-                lossOfInterest = string.Empty, urineAcidityValue = string.Empty, urineProtein = string.Empty,
-                urineSugar = string.Empty, urineSedimentMicroscopy = string.Empty, occultBlood = string.Empty,
-                urineRedBloodCells = string.Empty, urineWhiteBloodCells = string.Empty,
-                urineEpithelialCells = string.Empty, cast = string.Empty, bacteria = string.Empty,
-                appearance = string.Empty, hyperlipidemia = string.Empty, cholesterol = string.Empty,
+                lossOfInterest = string.Empty, urineAcidityValue = "未執行", urineProtein = string.Empty,
+                urineSugar = "未執行", urineSedimentMicroscopy = "未執行", occultBlood = "未執行",
+                urineRedBloodCells = "未執行", urineWhiteBloodCells = "未執行",
+                urineEpithelialCells = "未執行", cast = "未執行", bacteria = "未執行",
+                appearance = "未執行", hyperlipidemia = string.Empty, cholesterol = string.Empty,
                 triglycerides = string.Empty, fastingBloodSugar = string.Empty, creatinine = string.Empty,
                 GOT = string.Empty, GPT = string.Empty, highDensityLipoproteinCholesterol = string.Empty,
                 lowDensityLipoproteinCholesterol = string.Empty, glomerularFiltrationRate = string.Empty,
@@ -137,24 +170,26 @@ namespace TestAdultCheck
                 bloodPressureResultAndRecommendation = string.Empty, metabolicSyndromeResultAndRecommendation = string.Empty,
                 depressionDetectionResultAndRecommendation = string.Empty;
 
+            string hyperglycemiaTemp = string.Empty;
+
 
             string patientId = comp.Subject.Reference.ToString();
             Patient pat = client.Read<Patient>(patientId);
             if (pat != null)
             {
-                name = logic.DecryptStringFromBytes_Aes(pat.Name[0].Text); //姓名
+                name = decryp ? logic.DecryptStringFromBytes_Aes(pat.Name[0].Text) : pat.Name[0].Text; //姓名
                 foreach (Identifier identifier in pat.Identifier)
                 {
                     if (identifier.System == "http://www.moi.gov.tw/")
                     {
-                        id = logic.DecryptStringFromBytes_Aes(identifier.Value); //身分證字號
+                        id = decryp? logic.DecryptStringFromBytes_Aes(identifier.Value) : identifier.Value; //身分證字號
                     }
                 }
                 birthDate = pat.BirthDate;
                 gender = logic.ChangeGender(pat.Gender);
                 if (pat.Telecom != null && pat.Telecom.Count > 0)
                 {
-                    phone = logic.DecryptStringFromBytes_Aes(pat.Telecom[0].Value);
+                    phone = decryp ? logic.DecryptStringFromBytes_Aes(pat.Telecom[0].Value) : pat.Telecom[0].Value;  //電話
                 }
                 
             }
@@ -220,6 +255,11 @@ namespace TestAdultCheck
                                 if (component.Value is Hl7.Fhir.Model.Quantity systolicValue)
                                 {
                                     systolicPressure = systolicValue.Value.ToString();
+
+                                    if (highBloodPressure != "1")
+                                    {
+                                        highBloodPressure = systolicValue.Value >= 140 ? "1" : "0";  //高血壓: 收縮壓持續處於140 毫米水銀柱(mmHg) 或以上，或舒張壓持續處於90 毫米水銀柱或以上
+                                    }
                                 }                               
                             }
                             if (component.Code.Coding[0].Code == "8462-4")
@@ -227,6 +267,10 @@ namespace TestAdultCheck
                                 if (component.Value is Hl7.Fhir.Model.Quantity diastolicValue)
                                 {
                                     diastolicPressure = diastolicValue.Value.ToString();
+                                    if (highBloodPressure != "1")
+                                    {
+                                        highBloodPressure = diastolicValue.Value >= 90 ? "1" : "0";  //高血壓: 收縮壓持續處於140 毫米水銀柱(mmHg) 或以上，或舒張壓持續處於90 毫米水銀柱或以上
+                                    }
                                 }
                             }
                         }
@@ -256,7 +300,11 @@ namespace TestAdultCheck
 
                         if (sugar.Value is Hl7.Fhir.Model.Quantity sugarValue)
                         {
-                            fastingBloodSugar = sugarValue.Value.ToString();
+                            fastingBloodSugar = sugarValue.Value.ToString(); 
+                            if(hyperglycemiaTemp != "1")
+                            {
+                                hyperglycemiaTemp = sugarValue.Value >= 130 ? "1" : "0";  //空腹血糖超過130mg/dL
+                            }
                         }
                         break;
                     case "檢驗檢查-膽固醇":
@@ -267,6 +315,10 @@ namespace TestAdultCheck
                         if (chol.Value is Hl7.Fhir.Model.Quantity cholValue)
                         {
                             cholesterol = cholValue.Value.ToString();
+                            if (hyperlipidemia != "1")
+                            {
+                                hyperlipidemia = cholValue.Value >= 200 ? "1" : "0";  //高血脂: 總膽固醇之理想濃度為 <200mg/dl，三酸甘油酯之理想濃度為<130mg/dl。 當血中之三酸甘油酯和總膽固醇其中之一或兩者皆超過正常值時，即稱為高血脂。
+                            }
                         }
                         break;
                     case "檢驗檢查-三酸甘油脂":
@@ -277,6 +329,10 @@ namespace TestAdultCheck
                         if (tri.Value is Hl7.Fhir.Model.Quantity triValue)
                         {
                             triglycerides = triValue.Value.ToString();
+                            if (hyperlipidemia != "1")
+                            {
+                                hyperlipidemia = triValue.Value >= 130 ? "1" : "0";  //高血脂: 總膽固醇之理想濃度為 <200mg/dl，三酸甘油酯之理想濃度為<130mg/dl。 當血中之三酸甘油酯和總膽固醇其中之一或兩者皆超過正常值時，即稱為高血脂。
+                            }
                         }
                         break;
                     case "檢驗檢查-低密度脂蛋白膽固醇計算":
@@ -348,7 +404,7 @@ namespace TestAdultCheck
                     case "憂鬱檢測：感覺情緒低落沮喪與做事情失去興趣":
                         string depressionId = sec.Entry[0].Reference.ToString();
                         Observation depression = client.Read<Observation>(depressionId);
-
+                        resultUploadDate = logic.AdToRocEra(depression.Issued.ToString());
                         foreach (var component in depression.Component)
                         {
                             if (component.Code.Coding[0].Code == "66446005")  //感覺情緒低落沮喪
@@ -370,6 +426,7 @@ namespace TestAdultCheck
                     case "生活史-吸煙":
                         string smokeId = sec.Entry[0].Reference.ToString();
                         Observation smoke = client.Read<Observation>(smokeId);
+                        resultUploadDate = logic.AdToRocEra(smoke.Issued.ToString());
                         if (smoke.Value is FhirString smokeValue)
                         {
                             smoking = smokeValue.ToString();
@@ -378,6 +435,7 @@ namespace TestAdultCheck
                     case "生活史-喝酒":
                         string alcoholId = sec.Entry[0].Reference.ToString();
                         Observation alcohol = client.Read<Observation>(alcoholId);
+                        resultUploadDate = logic.AdToRocEra(alcohol.Issued.ToString());
                         if (alcohol.Value is FhirString alcoholValue)
                         {
                             alcoholConsumption = alcoholValue.ToString();
@@ -386,6 +444,7 @@ namespace TestAdultCheck
                     case "生活史-嚼檳榔":
                         string betelNutId = sec.Entry[0].Reference.ToString();
                         Observation betelNut = client.Read<Observation>(betelNutId);
+                        resultUploadDate = logic.AdToRocEra(betelNut.Issued.ToString());
                         if (betelNut.Value is FhirString betelNutValue)
                         {
                             betelNutChewing = betelNutValue.ToString();
@@ -394,6 +453,7 @@ namespace TestAdultCheck
                     case "生活史-運動":
                         string exerId = sec.Entry[0].Reference.ToString();
                         Observation exer = client.Read<Observation>(exerId);
+                        resultUploadDate = logic.AdToRocEra(exer.Issued.ToString());
                         if (exer.Value is FhirString exerValue)
                         {
                             exercise =exerValue.ToString();
@@ -402,6 +462,7 @@ namespace TestAdultCheck
                     case "健康諮詢：戒煙":
                         string quitSmokingConsultationId = sec.Entry[0].Reference.ToString();
                         Observation quitSmokingConsultation = client.Read<Observation>(quitSmokingConsultationId);
+                        resultUploadDate = logic.AdToRocEra(quitSmokingConsultation.Issued.ToString());
                         if (quitSmokingConsultation.Value is FhirString quitSmokingConsultationValue)
                         {
                             smokingCessationConsultation = quitSmokingConsultationValue.ToString();
@@ -410,6 +471,7 @@ namespace TestAdultCheck
                     case "健康諮詢：節酒":
                         string alcoholReductionConsultationId = sec.Entry[0].Reference.ToString();
                         Observation alcoholReduction = client.Read<Observation>(alcoholReductionConsultationId);
+                        resultUploadDate = logic.AdToRocEra(alcoholReduction.Issued.ToString());
                         if (alcoholReduction.Value is FhirString alcoholReductionConsultationValue)
                         {
                             alcoholReductionConsultation = alcoholReductionConsultationValue.ToString();
@@ -418,6 +480,7 @@ namespace TestAdultCheck
                     case "健康諮詢：戒檳榔":
                         string betelNutCessationConsultationId = sec.Entry[0].Reference.ToString();
                         Observation betelNutCessation = client.Read<Observation>(betelNutCessationConsultationId);
+                        resultUploadDate = logic.AdToRocEra(betelNutCessation.Issued.ToString());
                         if (betelNutCessation.Value is FhirString betelNutCessationConsultationValue)
                         {
                             betelNutCessationConsultation = betelNutCessationConsultationValue.ToString();
@@ -426,6 +489,7 @@ namespace TestAdultCheck
                     case "健康諮詢：規律運動":
                         string regularExerciseConsultationId = sec.Entry[0].Reference.ToString();
                         Observation regularExercise = client.Read<Observation>(regularExerciseConsultationId);
+                        resultUploadDate = logic.AdToRocEra(regularExercise.Issued.ToString());
                         if (regularExercise.Value is FhirString regularExerciseConsultationValue)
                         {
                             regularExerciseConsultation = regularExerciseConsultationValue.ToString();
@@ -434,6 +498,7 @@ namespace TestAdultCheck
                     case "健康諮詢：維持正常體重":
                         string maintainNormalWeightConsultationId = sec.Entry[0].Reference.ToString();
                         Observation maintainNormalWeight = client.Read<Observation>(maintainNormalWeightConsultationId);
+                        resultUploadDate = logic.AdToRocEra(maintainNormalWeight.Issued.ToString());
                         if (maintainNormalWeight.Value is FhirString maintainNormalWeightConsultationValue)
                         {
                             maintainNormalWeightConsultation = maintainNormalWeightConsultationValue.ToString();
@@ -442,6 +507,7 @@ namespace TestAdultCheck
                     case "健康諮詢：健康飲食":
                         string healthyDietConsultationId = sec.Entry[0].Reference.ToString();
                         Observation healthyDiet = client.Read<Observation>(healthyDietConsultationId);
+                        resultUploadDate = logic.AdToRocEra(healthyDiet.Issued.ToString());
                         if (healthyDiet.Value is FhirString healthyDietConsultationValue)
                         {
                             healthyDietConsultation = healthyDietConsultationValue.ToString();
@@ -512,7 +578,9 @@ namespace TestAdultCheck
                         DiagnosticReport depressionDetectionReport = client.Read<DiagnosticReport>(depressionDetectionResultAndRecommendationId);
                         depressionDetectionResultAndRecommendation = depressionDetectionReport.Conclusion;
                         break;
-                } 
+                }
+
+                threeHigh = (highBloodPressure == "1" || hyperlipidemia == "1" || hyperglycemiaTemp == "1") ? "1" : "0";  //三高: 高血壓、高血糖或高血脂
             }
 
             addExcel(worksheet, index, name, id, birthDate, gender, phone,firstCheckDate, secondCheckDate, 
