@@ -1,6 +1,7 @@
 ﻿using Hl7.Fhir.Model;
 using Hl7.Fhir.Rest;
 using System.Globalization;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Web;
@@ -11,6 +12,38 @@ namespace TestAdultCheck
     class LogicModels
     {
         static DataService secret = new DataService();
+
+        public string GetIdentifierValue(Patient pat, string typeCode, bool decryp)
+        {
+            string value = null;
+
+            foreach (Identifier identifier in pat.Identifier)
+            {
+                if (identifier.Type.Coding[0].Code == typeCode)
+                {
+                    value = decryp ? DecryptStringFromBytes_Aes(identifier.Value) : identifier.Value;
+                    break;
+                }
+            }
+
+            return value;
+        }
+
+        public string GetIdentifierValue(Organization org, string typeCode)
+        {
+            string value = null;
+
+            foreach (Identifier identifier in org.Identifier)
+            {
+                if (identifier.Type.Coding[0].Code == typeCode)
+                {
+                    value = identifier.Value;
+                    break;
+                }
+            }
+
+            return value;
+        }
 
         public string ChangeGender(AdministrativeGender? gender)
         {
