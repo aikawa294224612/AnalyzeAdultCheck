@@ -15,7 +15,7 @@ namespace TestAdultCheck
         {
 
             string token = secret.token;
-            string[] orgIdens = { "2346010019" };  //醫事機構代碼
+            string[] orgIdens = { "2346130016" };  //醫事機構代碼
             string fhirserver = secret.fhirserver;
             string monthanddate = System.DateTime.Now.ToString("MMdd");
             string excelFilePath = root + "台東衛生所成健_" + monthanddate + ".xlsx";
@@ -26,11 +26,11 @@ namespace TestAdultCheck
             var client = new FhirClient(fhirserver, FhirClientSettings.CreateDefault(), handler);
 
             FileInfo excelFile = new FileInfo(excelFilePath);
-            if (excelFile.Exists)
-            {
-                excelFile.Delete();
-                excelFile = new FileInfo(excelFilePath);
-            }
+            //if (excelFile.Exists)
+            //{
+            //    excelFile.Delete();
+            //    excelFile = new FileInfo(excelFilePath);
+            //}
 
             ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
             ExcelPackage package = new ExcelPackage(excelFile);
@@ -38,35 +38,36 @@ namespace TestAdultCheck
             {
                 foreach (string iden in orgIdens)
                 {
-                    // ExpiredContinue(package, client, iden, "2750", 2752);
-                    int index = 2;
+                    ExpiredContinue(package, client, iden, "3400", 3402);
+                    //int index = 2;
 
-                    string id = logic.GetOrgId(client, iden);
+                    //string id = logic.GetOrgId(client, iden);
 
-                    ExcelWorksheet worksheet = package.Workbook.Worksheets.Add(logic.GetOrgName(iden));
-                    InitialExcel(worksheet);  //初始化: 產生表頭
+                    //ExcelWorksheet worksheet = package.Workbook.Worksheets.Add(logic.GetOrgName(iden));
+                    //InitialExcel(worksheet);  //初始化: 產生表頭
 
-                    var searchParams = new SearchParams();
-                    searchParams.Add("_total", "accurate");
-                    searchParams.Add("author", "Organization/" + id);
-                    searchParams.Count = 50;
+                    //var searchParams = new SearchParams();
+                    //searchParams.Add("_total", "accurate");
+                    //searchParams.Add("_sort", "-identifier");
+                    //searchParams.Add("author", "Organization/" + id);
+                    //searchParams.Count = 50;
 
-                    Bundle results = client.Search<Composition>(searchParams);
+                    //Bundle results = client.Search<Composition>(searchParams);
 
-                    Console.WriteLine(logic.GetOrgName(id) + "總比數: " + results.Total);
+                    //Console.WriteLine(logic.GetOrgName(iden) + "總比數: " + results.Total);
 
-                    int? total = results.Total;
+                    //int? total = results.Total;
 
-                    while (index - 1 <= total)
-                    {
-                        foreach (Bundle.EntryComponent entry in results.Entry)
-                        {
-                            Composition comp = (Composition)entry.Resource;
-                            FillExcel(comp, worksheet, index, client, true);  //取得資料且寫入excel
-                            index++;
-                        }
-                        results = logic.GetNextPages(results, client, null);
-                    }
+                    //while (index - 1 <= total)
+                    //{
+                    //    foreach (Bundle.EntryComponent entry in results.Entry)
+                    //    {
+                    //        Composition comp = (Composition)entry.Resource;
+                    //        FillExcel(comp, worksheet, index, client, true);  //取得資料且寫入excel
+                    //        index++;
+                    //    }
+                    //    results = logic.GetNextPages(results, client, null);
+                    //}
 
                 }
                 package.Save();  //儲存excel
@@ -103,6 +104,7 @@ namespace TestAdultCheck
             // 重新抓Page ID
             var searchParams = new SearchParams();
             searchParams.Add("author", "Organization/" + id);
+            searchParams.Add("_sort", "-identifier");
             searchParams.Add("_total", "accurate");
             Bundle results = client.Search<Composition>(searchParams);
 
@@ -178,6 +180,31 @@ namespace TestAdultCheck
                 metabolicSyndromeResultAndRecommendation = string.Empty, hepatitisBResultAndRecommendation = string.Empty, 
                 hepatitisCResultAndRecommendation = string.Empty, depressionDetectionResultAndRecommendation = string.Empty;
 
+            //bool checkBCTypeHepatitis_isRed = false, hypertensionHistory_isRed = false, 
+            //    diabetesHistory_isRed = false, hyperlipidemiaHistory_isRed = false, 
+            //    heartDisease_isRed = false, stroke_isRed = false, kidneyDisease_isRed = false, 
+            //    height_isRed = false, weight_isRed = false, systolicPressure_isRed = false, 
+            //    diastolicPressure_isRed = false, highBloodPressure_isRed = false, threeHigh_isRed = false, 
+            //    waistCircumference_isRed = false, BMI_isRed = false, smoking_isRed = false, 
+            //    alcoholConsumption_isRed = false, betelNutChewing_isRed = false, exercise_isRed = false, 
+            //    smokingCessationConsultation_isRed = false, alcoholReductionConsultation_isRed = false, 
+            //    betelNutCessationConsultation_isRed = false, regularExerciseConsultation_isRed = false, 
+            //    maintainNormalWeightConsultation_isRed = false, healthyDietConsultation_isRed = false, 
+            //    accidentInjuryPreventionConsultation_isRed = false, oralHealthCareConsultation_isRed = false, 
+            //    hepatitisBSurfaceAntigen_isRed = false, hepatitisCAntibody_isRed = false, lowMood_isRed = false, 
+            //    lossOfInterest_isRed = false, urineAcidityValue_isRed = false, urineProtein_isRed = false, 
+            //    urineSugar_isRed = false, urineSedimentMicroscopy_isRed = false, occultBlood_isRed = false, 
+            //    urineRedBloodCells_isRed = false, urineWhiteBloodCells_isRed = false, urineEpithelialCells_isRed = false, 
+            //    cast_isRed = false, bacteria_isRed = false, appearance_isRed = false, hyperlipidemia_isRed = false, 
+            //    cholesterol_isRed = false, triglycerides_isRed = false, fastingBloodSugar_isRed = false, 
+            //    creatinine_isRed = false, GOT_isRed = false, GPT_isRed = false, highDensityLipoproteinCholesterol_isRed = false, 
+            //    lowDensityLipoproteinCholesterol_isRed = false, glomerularFiltrationRate_isRed = false, bbody_isRed = false, 
+            //    cbody_isRed = false, liverFunctionResultInterpretation_isRed = false, bloodSugarResultInterpretation_isRed = false, 
+            //    lipidProfileResultInterpretation_isRed = false, kidneyFunctionResultInterpretation_isRed = false, 
+            //    bloodPressureResultAndRecommendation_isRed = false, metabolicSyndromeResultAndRecommendation_isRed = false, 
+            //    hepatitisBResultAndRecommendation_isRed = false, hepatitisCResultAndRecommendation_isRed = false, 
+            //    depressionDetectionResultAndRecommendation_isRed = false;
+
             string hyperglycemiaTemp = string.Empty;
 
             checkNoticeSerialNumber = comp.Identifier.Value;
@@ -235,7 +262,6 @@ namespace TestAdultCheck
                     }
                 }
             }
-            
 
             foreach (var sec in comp.Section)
             {
@@ -349,7 +375,14 @@ namespace TestAdultCheck
                             fastingBloodSugar = sugarValue.Value.ToString(); 
                             if(hyperglycemiaTemp != "1")
                             {
-                                hyperglycemiaTemp = sugarValue.Value >= 130 ? "1" : "0";  //空腹血糖超過130mg/dL
+                                if(sugar.ReferenceRange != null && sugar.ReferenceRange.Count > 0)
+                                {
+                                    decimal? low = sugar.ReferenceRange[0].Low.Value;
+                                    decimal? high = sugar.ReferenceRange[0].High.Value;
+
+                                    hyperglycemiaTemp = (sugarValue.Value < low || sugarValue.Value > high) ? "1" : "0";  //依據上下值判斷
+                                } 
+                                
                             }
                         }
                         break;
@@ -366,7 +399,13 @@ namespace TestAdultCheck
                             cholesterol = cholValue.Value.ToString();
                             if (hyperlipidemia != "1")
                             {
-                                hyperlipidemia = cholValue.Value >= 200 ? "1" : "0";  //高血脂: 總膽固醇之理想濃度為 <200mg/dl，三酸甘油酯之理想濃度為<130mg/dl。 當血中之三酸甘油酯和總膽固醇其中之一或兩者皆超過正常值時，即稱為高血脂。
+                                if (chol.ReferenceRange != null && chol.ReferenceRange.Count > 0)
+                                {
+                                    decimal? low = chol.ReferenceRange[0].Low.Value;
+                                    decimal? high = chol.ReferenceRange[0].High.Value;
+
+                                    hyperlipidemia = (cholValue.Value < low || cholValue.Value > high) ? "1" : "0";  //依據上下值判斷
+                                }
                             }
                         }
                         break;
@@ -383,7 +422,13 @@ namespace TestAdultCheck
                             triglycerides = triValue.Value.ToString();
                             if (hyperlipidemia != "1")
                             {
-                                hyperlipidemia = triValue.Value >= 130 ? "1" : "0";  //高血脂: 總膽固醇之理想濃度為 <200mg/dl，三酸甘油酯之理想濃度為<130mg/dl。 當血中之三酸甘油酯和總膽固醇其中之一或兩者皆超過正常值時，即稱為高血脂。
+                                if (tri.ReferenceRange != null && tri.ReferenceRange.Count > 0)
+                                {
+                                    decimal? low = tri.ReferenceRange[0].Low.Value;
+                                    decimal? high = tri.ReferenceRange[0].High.Value;
+
+                                    hyperlipidemia = (triValue.Value < low || triValue.Value > high) ? "1" : "0";  //依據上下值判斷
+                                }
                             }
                         }
                         break;
@@ -716,7 +761,7 @@ namespace TestAdultCheck
                         DiagnosticReport depressionDetectionReport = client.Read<DiagnosticReport>(depressionDetectionResultAndRecommendationId);
                         depressionDetectionResultAndRecommendation = depressionDetectionReport.Conclusion;
                         break;
-                }
+                } 
 
                 threeHigh = (highBloodPressure == "1" || hyperlipidemia == "1" || hyperglycemiaTemp == "1") ? "1" : "0";  //三高: 高血壓、高血糖或高血脂
             }
@@ -740,6 +785,47 @@ namespace TestAdultCheck
                 bloodPressureResultAndRecommendation, metabolicSyndromeResultAndRecommendation, 
                 hepatitisBResultAndRecommendation, hepatitisCResultAndRecommendation, 
                 depressionDetectionResultAndRecommendation, com_id);
+
+            //addExcel_new(worksheet, index, name, id, checkNoticeSerialNumber, medicalRecordNumber,
+            //    birthDate, gender, phone, medicalInstitutionCode, firstCheckDate, secondCheckDate,
+            //    entrustedAgentMedicalInstitutionCode, registeredResidence, resultUploadDate,
+            //    checkBCTypeHepatitis, hypertensionHistory, diabetesHistory, hyperlipidemiaHistory,
+            //    heartDisease, stroke, kidneyDisease, height, weight, systolicPressure, diastolicPressure,
+            //    highBloodPressure, threeHigh, waistCircumference, BMI, smoking, alcoholConsumption,
+            //    betelNutChewing, exercise, smokingCessationConsultation, alcoholReductionConsultation,
+            //    betelNutCessationConsultation, regularExerciseConsultation, maintainNormalWeightConsultation,
+            //    healthyDietConsultation, accidentInjuryPreventionConsultation, oralHealthCareConsultation,
+            //    hepatitisBSurfaceAntigen, hepatitisCAntibody, lowMood, lossOfInterest, urineAcidityValue,
+            //    urineProtein, urineSugar, urineSedimentMicroscopy, occultBlood, urineRedBloodCells,
+            //    urineWhiteBloodCells, urineEpithelialCells, cast, bacteria, appearance, hyperlipidemia,
+            //    cholesterol, triglycerides, fastingBloodSugar, creatinine, GOT, GPT,
+            //    highDensityLipoproteinCholesterol, lowDensityLipoproteinCholesterol, glomerularFiltrationRate,
+            //    bbody, cbody, liverFunctionResultInterpretation, bloodSugarResultInterpretation,
+            //    lipidProfileResultInterpretation, kidneyFunctionResultInterpretation,
+            //    bloodPressureResultAndRecommendation, metabolicSyndromeResultAndRecommendation,
+            //    hepatitisBResultAndRecommendation, hepatitisCResultAndRecommendation,
+            //    depressionDetectionResultAndRecommendation, com_id,
+            //    checkBCTypeHepatitis_isRed, hypertensionHistory_isRed, diabetesHistory_isRed,
+            //    hyperlipidemiaHistory_isRed, heartDisease_isRed, stroke_isRed, kidneyDisease_isRed,
+            //    height_isRed, weight_isRed, systolicPressure_isRed, diastolicPressure_isRed,
+            //    highBloodPressure_isRed, threeHigh_isRed, waistCircumference_isRed, BMI_isRed,
+            //    smoking_isRed, alcoholConsumption_isRed, betelNutChewing_isRed, exercise_isRed,
+            //    smokingCessationConsultation_isRed, alcoholReductionConsultation_isRed,
+            //    betelNutCessationConsultation_isRed, regularExerciseConsultation_isRed,
+            //    maintainNormalWeightConsultation_isRed, healthyDietConsultation_isRed,
+            //    accidentInjuryPreventionConsultation_isRed, oralHealthCareConsultation_isRed,
+            //    hepatitisBSurfaceAntigen_isRed, hepatitisCAntibody_isRed, lowMood_isRed, lossOfInterest_isRed,
+            //    urineAcidityValue_isRed, urineProtein_isRed, urineSugar_isRed, urineSedimentMicroscopy_isRed,
+            //    occultBlood_isRed, urineRedBloodCells_isRed, urineWhiteBloodCells_isRed,
+            //    urineEpithelialCells_isRed, cast_isRed, bacteria_isRed, appearance_isRed, hyperlipidemia_isRed,
+            //    cholesterol_isRed, triglycerides_isRed, fastingBloodSugar_isRed, creatinine_isRed,
+            //    GOT_isRed, GPT_isRed, highDensityLipoproteinCholesterol_isRed,
+            //    lowDensityLipoproteinCholesterol_isRed, glomerularFiltrationRate_isRed, bbody_isRed,
+            //    cbody_isRed, liverFunctionResultInterpretation_isRed, bloodSugarResultInterpretation_isRed,
+            //    lipidProfileResultInterpretation_isRed, kidneyFunctionResultInterpretation_isRed,
+            //    bloodPressureResultAndRecommendation_isRed, metabolicSyndromeResultAndRecommendation_isRed,
+            //    hepatitisBResultAndRecommendation_isRed, hepatitisCResultAndRecommendation_isRed,
+            //    depressionDetectionResultAndRecommendation_isRed);
 
 
             Console.WriteLine(index + "_" + com_id + "Finish!");
@@ -854,8 +940,58 @@ namespace TestAdultCheck
             return worksheet;
         }
 
-        
-    
+        //public static ExcelWorksheet addExcel_new(ExcelWorksheet worksheet, int index,
+        //    string name, string id, string checkNoticeSerialNumber,
+        //    string medicalRecordNumber, string birthDate, string gender, string phone,
+        //    string medicalInstitutionCode, string firstCheckDate, string secondCheckDate,
+        //    string entrustedAgentMedicalInstitutionCode, string registeredResidence,
+        //    string resultUploadDate, string checkBCTypeHepatitis, string hypertensionHistory,
+        //    string diabetesHistory, string hyperlipidemiaHistory, string heartDisease, string stroke,
+        //    string kidneyDisease, string height, string weight, string systolicPressure,
+        //    string diastolicPressure, string highBloodPressure, string threeHigh, string waistCircumference,
+        //    string BMI, string smoking, string alcoholConsumption, string betelNutChewing,
+        //    string exercise, string smokingCessationConsultation, string alcoholReductionConsultation,
+        //    string betelNutCessationConsultation, string regularExerciseConsultation,
+        //    string maintainNormalWeightConsultation, string healthyDietConsultation,
+        //    string accidentInjuryPreventionConsultation, string oralHealthCareConsultation,
+        //    string hepatitisBSurfaceAntigen, string hepatitisCAntibody, string lowMood,
+        //    string lossOfInterest, string urineAcidityValue, string urineProtein, string urineSugar,
+        //    string urineSedimentMicroscopy, string occultBlood, string urineRedBloodCells,
+        //    string urineWhiteBloodCells, string urineEpithelialCells, string cast, string bacteria,
+        //    string appearance, string hyperlipidemia, string cholesterol, string triglycerides,
+        //    string fastingBloodSugar, string creatinine, string GOT, string GPT,
+        //    string highDensityLipoproteinCholesterol, string lowDensityLipoproteinCholesterol,
+        //    string glomerularFiltrationRate, string bbody, string cbody, string liverFunctionResultInterpretation,
+        //    string bloodSugarResultInterpretation, string lipidProfileResultInterpretation,
+        //    string kidneyFunctionResultInterpretation, string bloodPressureResultAndRecommendation,
+        //    string metabolicSyndromeResultAndRecommendation, string hepatitisBResultAndRecommendation,
+        //    string hepatitisCResultAndRecommendation, string depressionDetectionResultAndRecommendation, string com_id,
+        //    bool checkBCTypeHepatitis_isRed, bool hypertensionHistory_isRed, bool diabetesHistory_isRed,
+        //    bool hyperlipidemiaHistory_isRed, bool heartDisease_isRed, bool stroke_isRed,
+        //    bool kidneyDisease_isRed, bool height_isRed, bool weight_isRed, bool systolicPressure_isRed,
+        //    bool diastolicPressure_isRed, bool highBloodPressure_isRed, bool threeHigh_isRed,
+        //    bool waistCircumference_isRed, bool BMI_isRed, bool smoking_isRed, bool alcoholConsumption_isRed,
+        //    bool betelNutChewing_isRed, bool exercise_isRed, bool smokingCessationConsultation_isRed,
+        //    bool alcoholReductionConsultation_isRed, bool betelNutCessationConsultation_isRed,
+        //    bool regularExerciseConsultation_isRed, bool maintainNormalWeightConsultation_isRed,
+        //    bool healthyDietConsultation_isRed, bool accidentInjuryPreventionConsultation_isRed,
+        //    bool oralHealthCareConsultation_isRed, bool hepatitisBSurfaceAntigen_isRed,
+        //    bool hepatitisCAntibody_isRed, bool lowMood_isRed, bool lossOfInterest_isRed,
+        //    bool urineAcidityValue_isRed, bool urineProtein_isRed, bool urineSugar_isRed,
+        //    bool urineSedimentMicroscopy_isRed, bool occultBlood_isRed, bool urineRedBloodCells_isRed,
+        //    bool urineWhiteBloodCells_isRed, bool urineEpithelialCells_isRed, bool cast_isRed, bool bacteria_isRed,
+        //    bool appearance_isRed, bool hyperlipidemia_isRed, bool cholesterol_isRed, bool triglycerides_isRed,
+        //    bool fastingBloodSugar_isRed, bool creatinine_isRed, bool GOT_isRed, bool GPT_isRed,
+        //    bool highDensityLipoproteinCholesterol_isRed, bool lowDensityLipoproteinCholesterol_isRed,
+        //    bool glomerularFiltrationRate_isRed, bool bbody_isRed, bool cbody_isRed,
+        //    bool liverFunctionResultInterpretation_isRed, bool bloodSugarResultInterpretation_isRed,
+        //    bool lipidProfileResultInterpretation_isRed, bool kidneyFunctionResultInterpretation_isRed,
+        //    bool bloodPressureResultAndRecommendation_isRed, bool metabolicSyndromeResultAndRecommendation_isRed,
+        //    bool hepatitisBResultAndRecommendation_isRed, bool hepatitisCResultAndRecommendation_isRed,
+        //    bool depressionDetectionResultAndRecommendation_isRed)
+        //{
+        //    return null;
+        //}
 
     }
 }
