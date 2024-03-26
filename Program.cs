@@ -1,7 +1,6 @@
 ﻿using Hl7.Fhir.Model;
 using Hl7.Fhir.Rest;
 using OfficeOpenXml;
-using System;
 using System.Net.Http.Headers;
 
 namespace TestAdultCheck
@@ -16,7 +15,7 @@ namespace TestAdultCheck
         {
 
             string token = secret.token;
-            string[] orgIds = { "177246" };  //海端177246  //延平2
+            string[] orgIdens = { "2346010019" };  //醫事機構代碼
             string fhirserver = secret.fhirserver;
             string monthanddate = System.DateTime.Now.ToString("MMdd");
             string excelFilePath = root + "台東衛生所成健_" + monthanddate + ".xlsx";
@@ -37,18 +36,20 @@ namespace TestAdultCheck
             ExcelPackage package = new ExcelPackage(excelFile);
             try
             {
-                foreach (string id in orgIds)
+                foreach (string iden in orgIdens)
                 {
-                    // ExpiredContinue(package, client, id, "7018e484-8208-458a-8d71-f767ecb2d844", "2940", 2942);
+                    // ExpiredContinue(package, client, iden, "2750", 2752);
                     int index = 2;
 
-                    ExcelWorksheet worksheet = package.Workbook.Worksheets.Add(logic.GetOrgName(id));
+                    string id = logic.GetOrgId(client, iden);
+
+                    ExcelWorksheet worksheet = package.Workbook.Worksheets.Add(logic.GetOrgName(iden));
                     InitialExcel(worksheet);  //初始化: 產生表頭
 
                     var searchParams = new SearchParams();
                     searchParams.Add("_total", "accurate");
                     searchParams.Add("author", "Organization/" + id);
-                    searchParams.Count = 10;
+                    searchParams.Count = 50;
 
                     Bundle results = client.Search<Composition>(searchParams);
 
@@ -64,7 +65,7 @@ namespace TestAdultCheck
                             FillExcel(comp, worksheet, index, client, true);  //取得資料且寫入excel
                             index++;
                         }
-                        results = logic.GetNextPages(results, client);
+                        results = logic.GetNextPages(results, client, null);
                     }
 
                 }
@@ -93,34 +94,33 @@ namespace TestAdultCheck
         }
 
         public static void ExpiredContinue(ExcelPackage package, FhirClient client, 
-            string id, string pageId, string offset, int index)
+            string iden, string offset, int index)
         {
+            ExcelWorksheet worksheet = package.Workbook.Worksheets[logic.GetOrgName(iden)];
 
-            ExcelWorksheet worksheet = package.Workbook.Worksheets[logic.GetOrgName(id)];
+            string id = logic.GetOrgId(client, iden);
 
+            // 重新抓Page ID
             var searchParams = new SearchParams();
+            searchParams.Add("author", "Organization/" + id);
             searchParams.Add("_total", "accurate");
-            searchParams.Add("_getpages", pageId);
-            searchParams.Add("_getpagesoffset", offset);  //Important
-            searchParams.Add("_count", "10");
-            searchParams.Add("_pretty", "true");
-            searchParams.Add("_bundletype", "searchset");
+            Bundle results = client.Search<Composition>(searchParams);
 
-            Bundle results = client.Search(searchParams);
+            Bundle nextPage = logic.GetNextPages(results, client, offset);  //指定offset
 
-            Console.WriteLine(logic.GetOrgName(id) + "總比數: " + results.Total);
+            Console.WriteLine(logic.GetOrgName(iden) + "總比數: " + nextPage.Total);
 
-            int? total = results.Total;
+            int? total = nextPage.Total;
 
             while (index - 1 <= total)
             {
-                foreach (Bundle.EntryComponent entry in results.Entry)
+                foreach (Bundle.EntryComponent entry in nextPage.Entry)
                 {
                     Composition comp = (Composition)entry.Resource;
                     FillExcel(comp, worksheet, index, client, true);  //取得資料且寫入excel
                     index++;
                 }
-                results = logic.GetNextPages(results, client);
+                nextPage = logic.GetNextPages(nextPage, client, null);
             }
 
         }
@@ -231,7 +231,7 @@ namespace TestAdultCheck
                     Organization test = client.Read<Organization>(testId);
                     if (test != null)
                     {
-                        entrustedAgentMedicalInstitutionCode = logic.GetIdentifierValue(hospital, "PRN");
+                        entrustedAgentMedicalInstitutionCode = logic.GetIdentifierValue(test, "PRN");
                     }
                 }
             }

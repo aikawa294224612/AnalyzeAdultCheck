@@ -13,6 +13,19 @@ namespace TestAdultCheck
     {
         static DataService secret = new DataService();
 
+        public string GetOrgId(FhirClient client, string identifier)
+        {
+            var searchParams = new SearchParams();
+            searchParams.Add("identifier", identifier);
+
+            Bundle orgs = client.Search<Organization>(searchParams);
+
+            Organization org = (Organization)orgs.Entry[0].Resource;
+
+            return org.Id;
+
+        }
+
         public string GetIdentifierValue(Patient pat, string typeCode, bool decryp)
         {
             string value = null;
@@ -60,16 +73,22 @@ namespace TestAdultCheck
             return result;
         }
 
-        public string GetOrgName(string id)
+        public string GetOrgName(string iden)
         {
             string result = null;
-            switch (id)
+            switch (iden)
             {
-                case "177246":
+                case "2346130016":
                     result = "海端衛生所";
                     break;
-                case "2":
-                    result = "延平衛生所";
+                case "2346100018":
+                    result = "池上鄉衛生所";
+                    break;
+                case "2346010019":
+                    result = "台東巿衛生所";
+                    break;
+                case "2346120010":
+                    result = "延平鄉衛生所";
                     break;
             }
             return result;
@@ -91,7 +110,7 @@ namespace TestAdultCheck
             
         }
 
-        public Bundle? GetNextPages(Bundle results, FhirClient client)
+        public Bundle? GetNextPages(Bundle results, FhirClient client, string getpagesoffset)
         {   
             string nextLink = null;
             foreach(var link in results.Link)
@@ -114,12 +133,17 @@ namespace TestAdultCheck
             }
             Uri myUri = new Uri(nextLink);
             string getpages = HttpUtility.ParseQueryString(myUri.Query).Get("_getpages");
-            string getpagesoffset = HttpUtility.ParseQueryString(myUri.Query).Get("_getpagesoffset");
+
+
+            if(getpagesoffset == null)
+            {
+                getpagesoffset = HttpUtility.ParseQueryString(myUri.Query).Get("_getpagesoffset");
+            }
 
             var searchParams = new SearchParams();
             searchParams.Add("_getpages", getpages);
             searchParams.Add("_getpagesoffset", getpagesoffset);  //Important
-            searchParams.Add("_count", "10");
+            searchParams.Add("_count", "50");
             searchParams.Add("_pretty", "true");
             searchParams.Add("_bundletype", "searchset");
 
